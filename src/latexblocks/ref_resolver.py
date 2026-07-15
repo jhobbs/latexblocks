@@ -12,6 +12,7 @@ import html as html_lib
 import re
 from typing import Any, Dict, Optional, Set, Tuple
 
+from .config import get_config
 from .structured_math import (
     MathBlockType, apply_reference_case, lowercase_outside_math,
     text_with_math_to_html,
@@ -168,12 +169,13 @@ class RefResolver:
         text = m.group(2)
         if not text.strip():
             text = html_lib.escape(slug.rsplit("/", 1)[-1].replace("-", " ").title())
+        prefix = get_config().url_prefix
         if "/" in slug:
             canonical = slug if slug.endswith("/") else slug + "/"
-            return f'<a href="/mathnotes/{canonical}">{text}</a>'
+            return f'<a href="{prefix}/{canonical}">{text}</a>'
         for url in self.url_mapper.url_mappings:
             if url == f"{slug}/" or url.endswith(f"/{slug}/"):
-                return f'<a href="/mathnotes/{url}">{text}</a>'
+                return f'<a href="{prefix}/{url}">{text}</a>'
         return f'<a href="#broken-link-{html_lib.escape(slug, quote=True)}">{text}</a>'
 
     # -- dembed --

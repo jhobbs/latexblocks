@@ -6,9 +6,11 @@ files, enabling cross-file references using the @label syntax.
 """
 
 import html
+import logging
 import os
 from typing import Dict, Optional, List
 from dataclasses import dataclass
+from .config import get_config
 from .structured_math import (
     MathBlock, render_block_html, text_with_math_to_html, CHILD_MARKER_RE,
 )
@@ -16,11 +18,14 @@ from .ref_resolver import RefResolver
 from .reverse_index import ReverseIndex
 from .content_loader import load_content_file
 
+logger = logging.getLogger(__name__)
+
 
 def _ref_link_text(ref) -> str:
     """Reference-panel link text: source titles may contain $...$ math and
     must render through the math seam, never as raw TeX."""
-    title = ref.source_title or ref.source_label or ref.source_file.replace("content/", "")
+    root = get_config().content_dir.rstrip("/") + "/"
+    title = ref.source_title or ref.source_label or ref.source_file.replace(root, "")
     return text_with_math_to_html(title)
 
 
@@ -60,14 +65,14 @@ class BlockIndex:
         from . import notation
 
         if notation.refresh_registry():
-            print("Notation registry changed: invalidated all content/page caches")
+            logger.info("Notation registry changed: invalidated all content/page caches")
 
         # Reset any residue from a build that failed partway (e.g. a content
         # dialect error during an incremental rebuild) so blocks aren't
         # double-registered on the next attempt
         self._pending_files = []
 
-        content_dir = "content"
+        content_dir = get_config().content_dir
 
         # Snapshot label signatures before rebuilding so we can detect which
         # blocks were added, removed, or changed and invalidate the cached
@@ -101,13 +106,13 @@ class BlockIndex:
         self._is_built = True
 
         # Log index statistics
-        print(
+        logger.info(
             f"Block index built: {len(self.index)} labeled blocks found, {self._rendered_count} total blocks rendered"
         )
 
         # Log reverse index statistics
         stats = self.reverse_index.get_summary_stats()
-        print(f"Reverse index built: {stats['blocks_with_references']} blocks referenced, {stats['total_direct_references']} direct references")
+        logger.info(f"Reverse index built: {stats['blocks_with_references']} blocks referenced, {stats['total_direct_references']} direct references")
 
     def _label_signatures(self) -> Dict[str, tuple]:
         """Map each label to a signature of the block it currently resolves to."""
@@ -161,7 +166,7 @@ class BlockIndex:
 
             for file_path in affected_files:
                 invalidate_page_cache(file_path)
-            print(
+            logger.info(
                 f"Invalidated {len(affected_files)} cached page(s) referencing "
                 f"{len(changed_labels)} changed block label(s)"
             )
@@ -190,6 +195,7 @@ class BlockIndex:
         all_blocks = [b for t in top_blocks for b in t.walk()]
 
         # Get canonical URL for this file
+        prefix = get_config().url_prefix
         file_path_normalized = file_path.replace("\\", "/")
         canonical_url = self.url_mapper.get_canonical_url(file_path_normalized)
 
@@ -211,14 +217,14 @@ class BlockIndex:
             ref = BlockReference(
                 block=block,
                 file_path=file_path,
-                canonical_url=f"/mathnotes/{canonical_url}",
+                canonical_url=f"{prefix}/{canonical_url}",
                 page_title=page_title,
             )
 
             for notation_name, _ in block.notations:
                 if notation_name in self.notation_map:
                     existing = self.notation_map[notation_name]
-                    print(
+                    logger.warning(
                         f"Warning: Duplicate notation '\\{notation_name}' in "
                         f"{file_path} (previously in {existing.file_path})"
                     )
@@ -235,7 +241,7 @@ class BlockIndex:
 
             if normalized_label in self.index:
                 existing = self.index[normalized_label]
-                print(
+                logger.warning(
                     f"Warning: Duplicate label '{block.label}' found in {file_path} (previously in {existing.file_path})"
                 )
             self.index[normalized_label] = ref
@@ -245,7 +251,7 @@ class BlockIndex:
                 label=block.label,
                 file_path=file_path,
                 title=block.title or block.label,
-                url=f"/mathnotes/{canonical_url}#{block.label}"
+                url=f"{prefix}/{canonical_url}#{block.label}"
             )
 
             # Also register synonyms as aliases pointing to the same block
@@ -258,7 +264,7 @@ class BlockIndex:
 
                     if normalized_synonym_label in self.index:
                         existing = self.index[normalized_synonym_label]
-                        print(
+                        logger.warning(
                             f"Warning: Synonym label '{synonym_label}' conflicts with existing label in {existing.file_path}"
                         )
                     else:
@@ -266,7 +272,7 @@ class BlockIndex:
                         synonym_ref = BlockReference(
                             block=block,
                             file_path=file_path,
-                            canonical_url=f"/mathnotes/{canonical_url}",
+                            canonical_url=f"{prefix}/{canonical_url}",
                             page_title=page_title,
                         )
                         # Store the synonym title for later use
@@ -279,16 +285,17 @@ class BlockIndex:
                             label=synonym_label,
                             file_path=file_path,
                             title=synonym_title,
-                            url=f"/mathnotes/{canonical_url}#{block.label}"
+                            url=f"{prefix}/{canonical_url}#{block.label}"
                         )
 
     def _collect_all_references(self):
         """Phase 2: Collect all references to build the reverse index."""
+        prefix = get_config().url_prefix
         for file_info in self._pending_files:
             file_path = file_info["file_path"]
             canonical_url = file_info["canonical_url"]
             page_title = file_info.get("page_title", "")
-            base_url = f"/mathnotes/{canonical_url}"
+            base_url = f"{prefix}/{canonical_url}"
 
             # Page-level references (prose outside of any block)
             page_resolver = RefResolver(self, self.url_mapper, current_file=file_path)
@@ -333,10 +340,11 @@ class BlockIndex:
 
     def _render_all_blocks(self):
         """Phase 4: Render all blocks now that the index and references are complete."""
+        prefix = get_config().url_prefix
         rendered = 0
         for file_info in self._pending_files:
             file_path = file_info["file_path"]
-            base_url = f"/mathnotes/{file_info['canonical_url']}"
+            base_url = f"{prefix}/{file_info['canonical_url']}"
 
             def render_tree(block):
                 nonlocal rendered

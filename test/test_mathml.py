@@ -10,8 +10,8 @@ import subprocess
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                       "src", "latexblocks", "assets")
 WORKER = os.path.join(ASSETS, "tex2mml-worker.mjs")
-STY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                   "src", "latex", "mathnotes.sty")
+from latexblocks.assets import default_sty_path
+STY = str(default_sty_path())
 
 
 def worker_roundtrip(requests):

@@ -54,16 +54,12 @@ def _wrap_notation_macros(latex: str) -> str:
 
 
 # Structural shorthand macros (\bal ... \eal): parameterless one-line \def's
-# read from the PRE-EXPANSION MACROS section of latex/mathnotes.sty (the
+# read from the PRE-EXPANSION MACROS section of the configured .sty (the
 # single source of truth, shared with pdflatex) and expanded textually before
 # the pylatexenc walk — pylatexenc parses surface syntax without expanding
 # macros, so anything that changes document structure (like opening display
 # math) must be substituted first. Bodies are required to be single-line so
 # node positions keep mapping to source lines.
-_STY_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "latex", "mathnotes.sty")
-
 _PREEXPANSION_DEF_RE = re.compile(r"\\def\\([A-Za-z]+)\{")
 
 
@@ -99,7 +95,8 @@ def _parse_preexpansion_macros(sty: str) -> Dict[str, str]:
 
 
 def _load_preexpansion_macros() -> Dict[str, str]:
-    with open(_STY_PATH, "r", encoding="utf-8") as f:
+    from .config import sty_path
+    with open(sty_path(), "r", encoding="utf-8") as f:
         return _parse_preexpansion_macros(f.read())
 
 
@@ -680,8 +677,15 @@ class _Parser:
     def _fix_image_path(self, path: str) -> str:
         if re.match(r"^(https?:|data:|/)", path):
             return path
-        directory = os.path.dirname(self.filepath).replace("content/", "", 1).replace("content", "")
-        return f"/mathnotes/{directory}/{path}".replace("//", "/")
+        from .config import get_config
+        cfg = get_config()
+        directory = os.path.dirname(self.filepath)
+        root = cfg.content_dir.rstrip("/")
+        if directory == root:
+            directory = ""
+        elif directory.startswith(root + "/"):
+            directory = directory[len(root) + 1:]
+        return f"{cfg.url_prefix}/{directory}/{path}".replace("//", "/")
 
     def _check_ref_text(self, n, text: str) -> None:
         """Optional-text arguments to \\dref/\\pagelink render through _prose,

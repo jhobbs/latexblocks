@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from typing import Dict, Optional
 
+from .config import get_config
 from .content_loader import load_content_file
 from .ref_resolver import RefResolver, labels_from_rendered_html
 from .structured_math import MathBlock
@@ -71,7 +72,7 @@ class PageRenderer:
             "title": metadata.get("title", Path(filepath).stem.replace("-", " ").title()),
             "page_description": self._generate_description(metadata, html_content),
             "source_path": filepath,
-            "canonical_url": f"/mathnotes/{canonical_url}",
+            "canonical_url": f"{get_config().url_prefix}/{canonical_url}",
             "has_integrated_demos": 'data-demo="' in html_content,
             "tooltip_data": tooltip_data,
         }

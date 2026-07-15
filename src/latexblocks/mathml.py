@@ -23,9 +23,6 @@ class _WorkerDied(Exception):
 
 _WORKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "assets", "tex2mml-worker.mjs")
-# TEMP until Task 4: dirname(package) = src/, so this is src/latex/mathnotes.sty
-_TEMP_STY_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "latex", "mathnotes.sty")
 
 
 class MathConverter:
@@ -106,7 +103,9 @@ def get_converter() -> MathConverter:
     """Module-level singleton; atexit covers the build script and watch mode."""
     global _converter
     if _converter is None:
-        _converter = MathConverter(_WORKER_PATH, _TEMP_STY_PATH)  # Task 4: config paths
+        from .config import get_config, sty_path, worker_path
+        _converter = MathConverter(worker_path(), sty_path(),
+                                   get_config().node_modules_dir)
         atexit.register(_converter.close)
     return _converter
 
