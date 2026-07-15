@@ -12,7 +12,9 @@
 @custom-media --phone (max-width: 640px);
 
 /* ===== Variable prelude: values copied from mathnotes styles/theme.css.
-   These are fallbacks — a site theme loaded AFTER this file overrides them. */
+   These are fallbacks — a site theme loaded AFTER this file overrides them.
+   Fallback values are light-only. A host with a dark theme must supply its
+   own dark values for these variables (see mathnotes theme.css). */
 :root {
   /* ===== CORE COLOR PALETTE ===== */
   /* Base colors - everything else derives from these */
@@ -279,103 +281,6 @@
   --text-secondary: var(--color-text-secondary);
   --card-background: var(--color-card-bg);
   --border-color: var(--color-border);
-}
-
-/* Dark values for the same vars, copied from theme.css dark block. */
-@media (--dark) {
-  :root {
-    /* Redefine base neutrals for dark mode */
-    --base-neutral-0: oklch(15% 0.02 240);
-    --base-neutral-100: oklch(18% 0.02 240);
-    --base-neutral-200: oklch(22% 0.02 240);
-    --base-neutral-300: oklch(30% 0.01 210);
-    --base-neutral-700: oklch(65% 0.02 210);
-    --base-neutral-800: oklch(85% 0.01 210);
-    --base-neutral-900: oklch(100% 0 0);
-    
-    /* Adjust brand colors for dark mode */
-    --base-primary: oklch(73% 0.15 220);
-    --base-error: oklch(67% 0.24 25);
-    
-    /* Background colors automatically update via base neutrals */
-    --color-bg: var(--base-neutral-0);
-    --color-bg-secondary: var(--base-neutral-0);
-    --color-card-bg: var(--base-neutral-200);
-    --color-code-bg: var(--base-neutral-100);
-    
-    /* Text colors automatically update */
-    --color-text: var(--base-neutral-800);
-    --color-text-secondary: var(--base-neutral-700);
-    --color-heading: oklch(96% 0.01 210);
-    
-    /* Interactive elements */
-    --color-link-hover: oklch(68% 0.17 220);
-    --color-button-bg: oklch(28% 0.02 240);
-    --color-button-hover: oklch(34% 0.02 240);
-    --color-button-text: var(--base-neutral-900);
-    
-    /* Borders */
-    --color-border-light: oklch(26% 0.01 240);
-    
-    /* State colors */
-    --color-error-bg: oklch(25% 0.10 25);
-    --color-error-text-dark: oklch(90% 0.09 25);
-    --color-info-bg: oklch(20% 0.05 220);
-    
-    /* Overlays - now using white instead of black */
-    --color-overlay-light: color-mix(in oklch, var(--base-neutral-900) 2%, transparent);
-    --color-overlay-medium: color-mix(in oklch, var(--base-neutral-900) 5%, transparent);
-    --color-overlay-dark: color-mix(in oklch, var(--base-neutral-900) 10%, transparent);
-    --color-spinner-border: color-mix(in oklch, var(--base-neutral-900) 10%, transparent);
-    
-    /* Tooltip colors */
-    --color-tooltip-bg: var(--base-neutral-100);
-    --color-tooltip-footer-bg: var(--base-neutral-0);
-    
-    /* Math colors - slightly brighter for dark mode */
-    --color-definition: oklch(65% 0.13 252);
-    --color-theorem: oklch(68% 0.15 142);
-    --color-lemma: oklch(66% 0.14 241);
-    --color-proposition: oklch(70% 0.12 230);
-    --color-corollary: oklch(62% 0.08 250);
-    --color-axiom: oklch(64% 0.16 280);
-    --color-proof: oklch(55% 0.05 250);
-    --color-example: oklch(63% 0.13 150);
-    --color-remark: oklch(60% 0.06 250);
-    --color-note: oklch(60% 0.06 250);
-    --color-intuition: oklch(72% 0.12 180);
-    --color-exercise: oklch(65% 0.13 252);
-    --color-solution: oklch(60% 0.06 250);
-    
-    /* Math tooltip type colors for dark mode */
-    --color-type-definition: var(--base-primary);
-    --color-type-theorem: var(--base-error);
-    --color-type-proposition: oklch(75% 0.15 300);
-    --color-type-lemma: oklch(72% 0.17 40);
-    --color-type-corollary: oklch(65% 0.12 142);
-    --color-type-axiom: oklch(68% 0.16 280);
-    --color-type-example: oklch(70% 0.10 85);
-    --color-type-note: oklch(65% 0.04 250);
-    
-    /* Nested overlays - increased opacity for dark mode */
-    --color-nested-definition: color-mix(in oklch, var(--color-definition) 6%, transparent);
-    --color-nested-theorem: color-mix(in oklch, var(--color-theorem) 6%, transparent);
-    --color-nested-lemma: color-mix(in oklch, var(--color-lemma) 6%, transparent);
-    --color-nested-proposition: color-mix(in oklch, var(--color-proposition) 6%, transparent);
-    --color-nested-corollary: color-mix(in oklch, var(--color-corollary) 5%, transparent);
-    --color-nested-axiom: color-mix(in oklch, var(--color-axiom) 6%, transparent);
-    --color-nested-proof: color-mix(in oklch, var(--color-proof) 6%, transparent);
-    --color-nested-example: color-mix(in oklch, var(--color-example) 6%, transparent);
-    
-    /* Embedded block overlays */
-    --color-embedded-bg: color-mix(in oklch, var(--base-neutral-900) 3%, transparent);
-    
-    /* Darker shadows for dark mode */
-    --shadow-sm: 0 1px 2px 0 color-mix(in oklch, var(--base-neutral-900) 20%, transparent);
-    --shadow-md: 0 4px 6px -1px color-mix(in oklch, var(--base-neutral-900) 30%, transparent);
-    --shadow-lg: 0 10px 15px -3px color-mix(in oklch, var(--base-neutral-900) 40%, transparent);
-    --shadow-xl: 0 20px 25px -5px color-mix(in oklch, var(--base-neutral-900) 50%, transparent);
-  }
 }
 
 /* ============================================================

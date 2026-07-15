@@ -24,6 +24,19 @@ def test_js_binds_the_contract():
     assert "block-label-ref" in js
 
 
+def test_dark_fallbacks_are_light_only():
+    """Dark-mode VARIABLE fallbacks must not ship: on light-only hosts they
+    flip text colors while backgrounds stay light (unreadable). Hosts supply
+    their own dark values; rule-level dark blocks remain var-driven."""
+    css = assets.web_css_path().read_text(encoding="utf-8")
+    import re
+    blocks = re.findall(
+        r"@media \(prefers-color-scheme: dark\)\s*\{(.*?)\n\}", css, re.DOTALL)
+    assert blocks, "expected rule-level dark blocks to remain in shipped css"
+    for block in blocks:
+        assert "--color-text:" not in block, "dark var fallback leaked into shipped css"
+
+
 def test_copy_web_assets(tmp_path):
     assets.copy_web_assets(tmp_path)
     assert (tmp_path / "latexblocks.css").exists()
