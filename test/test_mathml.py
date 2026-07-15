@@ -1,19 +1,22 @@
-"""Tests for the LaTeX->MathML worker (scripts/tex2mml-worker.mjs) and the
-MathConverter client (mathnotes/mathml.py).
+"""Tests for the LaTeX->MathML worker (src/latexblocks/assets/tex2mml-worker.mjs)
+and the MathConverter client (latexblocks/mathml.py).
 
-Run: docker exec -i mathnotes-static-builder python3 - < test/test_mathml.py
+Run: ./dev.sh pytest test/test_mathml.py -q
 """
 import json
 import os, sys, traceback
 import subprocess
 
-ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
-WORKER = os.path.join(ROOT, "scripts", "tex2mml-worker.mjs")
+ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      "src", "latexblocks", "assets")
+WORKER = os.path.join(ASSETS, "tex2mml-worker.mjs")
+STY = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                   "src", "latex", "mathnotes.sty")
 
 
 def worker_roundtrip(requests):
     proc = subprocess.run(
-        ["node", WORKER],
+        ["node", WORKER, STY],
         input="".join(json.dumps(r) + "\n" for r in requests),
         capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
@@ -94,7 +97,7 @@ def test_worker_cancel_rewrites_menclose():
 
 
 def test_worker_malformed_protocol_exits_nonzero():
-    proc = subprocess.run(["node", WORKER], input="not json\n",
+    proc = subprocess.run(["node", WORKER, STY], input="not json\n",
                           capture_output=True, text=True, timeout=120)
     assert proc.returncode != 0
 
@@ -103,7 +106,7 @@ from latexblocks.mathml import MathConverter, MathConversionError, get_converter
 
 
 def test_converter_roundtrip():
-    c = MathConverter()
+    c = MathConverter(WORKER, STY)
     try:
         mml = c.convert("x^2", display=False)
         assert mml.startswith("<math") and 'alttext="x^2"' in mml
@@ -114,7 +117,7 @@ def test_converter_roundtrip():
 
 
 def test_converter_tex_error_raises():
-    c = MathConverter()
+    c = MathConverter(WORKER, STY)
     try:
         try:
             c.convert("\\notarealmacro", display=False)
@@ -128,7 +131,7 @@ def test_converter_tex_error_raises():
 
 
 def test_converter_restarts_dead_worker():
-    c = MathConverter()
+    c = MathConverter(WORKER, STY)
     try:
         assert c.convert("x", display=False).startswith("<math")
         c._proc.kill()

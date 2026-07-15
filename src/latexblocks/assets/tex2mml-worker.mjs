@@ -5,9 +5,16 @@
 // malformed protocol input terminates the worker with a nonzero exit.
 import { createInterface } from 'node:readline';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import mathjax from 'mathjax';
+import { createRequire } from 'node:module';
+
+// The worker lives inside an installed Python package, where no node_modules
+// exists above it, so a bare `import mathjax` cannot resolve. The consumer's
+// environment provides mathjax (^3.2.2); resolve it from argv[3] (see
+// mathml.py / configure(node_modules_dir=...)) or from the process cwd.
+const requireFrom = createRequire(
+  path.join(process.argv[3] || process.cwd(), 'noop.js'));
+const mathjax = requireFrom('mathjax');
 
 // Math macros live in latex/mathnotes.sty (single source of truth, shared
 // with pdflatex). Parse the marked section: simple one-line
@@ -43,8 +50,13 @@ function parseStyMacros(sty) {
   return macros;
 }
 
-const styPath = path.join(
-  path.dirname(fileURLToPath(import.meta.url)), '..', 'latex', 'mathnotes.sty');
+// Usage: node tex2mml-worker.mjs <macros.sty> [node-modules-parent-dir]
+const styPath = process.argv[2];
+if (!styPath) {
+  process.stderr.write(
+    'tex2mml-worker: usage: node tex2mml-worker.mjs <macros.sty> [node-modules-parent]\n');
+  process.exit(1);
+}
 
 const MathJax = await mathjax.init({
   loader: { load: ['input/tex', '[tex]/cancel', '[tex]/html'] },

@@ -1,6 +1,6 @@
 """Build-time LaTeX -> MathML conversion via a persistent Node MathJax worker.
 
-MathConverter speaks the JSON-lines protocol of scripts/tex2mml-worker.mjs.
+MathConverter speaks the JSON-lines protocol of assets/tex2mml-worker.mjs.
 One request is in flight at a time (the build is single-threaded). If the
 worker dies mid-request it is restarted once and the request retried; a
 second failure is a hard error. A TeX parse error is a MathConversionError.
@@ -21,19 +21,28 @@ class _WorkerDied(Exception):
     pass
 
 
-_WORKER_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "scripts", "tex2mml-worker.mjs")
+_WORKER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "assets", "tex2mml-worker.mjs")
+# TEMP until Task 4: dirname(package) = src/, so this is src/latex/mathnotes.sty
+_TEMP_STY_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "latex", "mathnotes.sty")
 
 
 class MathConverter:
-    def __init__(self, worker_path: str = _WORKER_PATH):
+    def __init__(self, worker_path: str = _WORKER_PATH, sty_path: Optional[str] = None,
+                 node_modules_dir: Optional[str] = None):
         self.worker_path = worker_path
+        self.sty_path = sty_path
+        self.node_modules_dir = node_modules_dir
         self._proc: Optional[subprocess.Popen] = None
         self._next_id = 0
 
     def _spawn(self):
         cmd = ["node", self.worker_path]
+        if self.sty_path:
+            cmd.append(self.sty_path)
+            if self.node_modules_dir:  # argv[3] only meaningful after argv[2]
+                cmd.append(self.node_modules_dir)
         try:
             self._proc = subprocess.Popen(
                 cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -97,6 +106,14 @@ def get_converter() -> MathConverter:
     """Module-level singleton; atexit covers the build script and watch mode."""
     global _converter
     if _converter is None:
-        _converter = MathConverter()
+        _converter = MathConverter(_WORKER_PATH, _TEMP_STY_PATH)  # Task 4: config paths
         atexit.register(_converter.close)
     return _converter
+
+
+def reset_converter() -> None:
+    """Close and forget the worker singleton (configure() calls this)."""
+    global _converter
+    if _converter is not None:
+        _converter.close()
+    _converter = None
