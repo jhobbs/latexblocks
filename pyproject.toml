@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "latexblocks"
+version = "0.1.0"
+description = "LaTeX-dialect structured math blocks -> HTML with cross-references, tooltips, and build-time MathML"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+dependencies = ["pylatexenc==2.10"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+latexblocks = ["assets/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]

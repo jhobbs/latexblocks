@@ -1,0 +1,11 @@
+# Dev/test environment: python 3.14 + node 24. The repo mounts at /app;
+# PYTHONPATH makes src/latexblocks importable without pip install.
+FROM python:3.14-slim
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+ && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/* \
+ && node --version
+RUN pip install --no-cache-dir pylatexenc==2.10 pytest
+ENV PYTHONPATH=/app/src
+WORKDIR /app
