@@ -175,7 +175,7 @@ Everything runs through `./dev.sh` (a thin `docker run` wrapper over the
 ./dev.sh npm ci                 # install frontend/build tooling
 ./dev.sh node build.mjs         # rebuild src/latexblocks/assets/{latexblocks.js,latexblocks.css,fonts/}
 ./dev.sh pip install -e '.[dev]'
-./dev.sh pytest -q              # 129 tests
+./dev.sh pytest -q
 ```
 
 The committed files under `src/latexblocks/assets/` (`latexblocks.js`,
