@@ -24,7 +24,7 @@ function parseStyMacros(sty) {
   const begin = sty.indexOf('% BEGIN MATH MACROS');
   const end = sty.indexOf('% END MATH MACROS');
   if (begin === -1 || end === -1 || end <= begin) {
-    throw new Error('mathnotes.sty: MATH MACROS markers not found');
+    throw new Error(`${styPath}: MATH MACROS markers not found`);
   }
   const section = sty.slice(begin, end);
   const definition = /\\(?:re)?newcommand\{\\([A-Za-z]+)\}(?:\[(\d)\])?\{/g;
@@ -45,7 +45,7 @@ function parseStyMacros(sty) {
     definition.lastIndex = i;
   }
   if (Object.keys(macros).length === 0) {
-    throw new Error('mathnotes.sty: no macros parsed from MATH MACROS section');
+    throw new Error(`${styPath}: no macros parsed from MATH MACROS section`);
   }
   return macros;
 }

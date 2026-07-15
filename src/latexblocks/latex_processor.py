@@ -63,11 +63,11 @@ def _wrap_notation_macros(latex: str) -> str:
 _PREEXPANSION_DEF_RE = re.compile(r"\\def\\([A-Za-z]+)\{")
 
 
-def _parse_preexpansion_macros(sty: str) -> Dict[str, str]:
+def _parse_preexpansion_macros(sty: str, sty_name: str = "the .sty file") -> Dict[str, str]:
     begin = sty.find("% BEGIN PRE-EXPANSION MACROS")
     end = sty.find("% END PRE-EXPANSION MACROS")
     if begin == -1 or end == -1 or end <= begin:
-        raise ValueError("mathnotes.sty: PRE-EXPANSION MACROS markers not found")
+        raise ValueError(f"{sty_name}: PRE-EXPANSION MACROS markers not found")
     section = sty[begin:end]
     macros: Dict[str, str] = {}
     for m in _PREEXPANSION_DEF_RE.finditer(section):
@@ -81,26 +81,34 @@ def _parse_preexpansion_macros(sty: str) -> Dict[str, str]:
                 depth -= 1
             i += 1
         if depth != 0:
-            raise ValueError(f"mathnotes.sty: unbalanced braces in \\def\\{m.group(1)}")
+            raise ValueError(f"{sty_name}: unbalanced braces in \\def\\{m.group(1)}")
         body = section[m.end():i - 1]
         if "\n" in body:
             raise ValueError(
-                f"mathnotes.sty: \\def\\{m.group(1)} body spans multiple lines; "
+                f"{sty_name}: \\def\\{m.group(1)} body spans multiple lines; "
                 f"pre-expansion bodies must be single-line to preserve "
                 f"source-line mapping")
         macros[m.group(1)] = body
     if not macros:
-        raise ValueError("mathnotes.sty: no macros in PRE-EXPANSION MACROS section")
+        raise ValueError(f"{sty_name}: no macros in PRE-EXPANSION MACROS section")
     return macros
 
 
 def _load_preexpansion_macros() -> Dict[str, str]:
     from .config import sty_path
-    with open(sty_path(), "r", encoding="utf-8") as f:
-        return _parse_preexpansion_macros(f.read())
+    path = sty_path()
+    with open(path, "r", encoding="utf-8") as f:
+        return _parse_preexpansion_macros(f.read(), path)
 
 
 _preexpansion_macros: Optional[Dict[str, str]] = None
+
+
+def clear_preexpansion_cache() -> None:
+    """Drop the cached PRE-EXPANSION MACROS table so the next parse reloads it
+    from the (possibly reconfigured) .sty. Called by config.reset_state()."""
+    global _preexpansion_macros
+    _preexpansion_macros = None
 
 
 def _expand_preexpansion(source: str, macros: Optional[Dict[str, str]] = None) -> str:

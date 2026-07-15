@@ -19,9 +19,10 @@ There is no PyPI package; install from the tagged GitHub archive above.
 
 ## Runtime requirements
 
-Parsing content that has **no math** needs nothing beyond the pip install
-(`pylatexenc` is the only runtime dependency). Parsing content that contains
-math additionally needs, at the moment a math node is first converted:
+Python **>=3.14** is required (the pip install enforces this). Parsing content
+that has **no math** needs nothing further (`pylatexenc` is the only runtime
+dependency). Parsing content that contains math additionally needs, at the
+moment a math node is first converted:
 
 - `node` (>=24) on `PATH`
 - the `mathjax` npm package (`^3.2.2`), resolvable either from the process's
@@ -77,7 +78,7 @@ parsing.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `url_prefix` | `""` | Prepended to every canonical URL as `f"{url_prefix}/{canonical_url}"`. A site served at the root uses `""`; mathnotes uses `"/mathnotes"`. |
+| `url_prefix` | `""` | Prepended to every canonical URL as `f"{url_prefix}/{canonical_url}"`. A site served at the root uses `""`; mathnotes uses `"/mathnotes"`. A trailing slash is normalized away at `configure()` time. |
 | `content_dir` | `"content"` | Scan root for `BlockIndex.build_index()` and the notation registry pre-scan; also the prefix stripped from file paths when deriving display titles and image URLs. |
 | `sty_path` | `None` | Path to the macro package (PRE-EXPANSION MACROS, MATH MACROS names, MATH MACROS expansions). `None` uses the packaged `assets/default.sty`. |
 | `worker_path` | `None` | Path to the Node MathML worker script. `None` uses the packaged `assets/tex2mml-worker.mjs`. |
@@ -109,6 +110,9 @@ bundle into a site's static output: `latexblocks.css`, `latexblocks.js`
 needed), and `fonts/` (the math webfont referenced by the CSS). The bundle
 is CSP-compliant — no inline scripts, no inline event handlers.
 
+Load `latexblocks.css` BEFORE the site theme so the site's `:root` values
+win over the bundle's own defaults.
+
 At runtime the bundle wires up two features:
 
 - **Reference tooltips**: hover/tap targets matching
@@ -117,9 +121,23 @@ At runtime the bundle wires up two features:
   those need JS-driven navigation via `data-ref-url` instead of `href`).
   Tooltip content comes from a JSON island the page must emit:
   `<script type="application/json" id="tooltip-data">[...]</script>`, an
-  array of objects shaped like `PageRenderer.render_page()`'s
-  `tooltip_data` dict values: `label`, `type`, `title`, `content`, and
-  optionally `url`, `is_synonym`, `synonym_of`, `synonym_title`.
+  **array** of objects each carrying `label`, `type`, `title`, `content`,
+  and optionally `url`, `is_synonym`, `synonym_of`, `synonym_title`.
+
+  `render_page()["tooltip_data"]` is a **dict** keyed by label, and its
+  entry values do NOT contain a `label` key — so the page must fold the key
+  into each entry before serializing. Use exactly this idiom:
+
+  ```python
+  import json
+  island = json.dumps([
+      {"label": label, **entry}
+      for label, entry in sorted(result["tooltip_data"].items())
+  ])
+  ```
+
+  (Planned: `get_tooltip_data()` may return the array shape directly in
+  v0.2.0; until then the caller performs this transform.)
 - **Label copy-to-clipboard**: every `.block-label-ref` element is rewritten
   to a `※` mark; clicking it copies the block's original label text to the
   clipboard with transient visual feedback.
@@ -139,6 +157,10 @@ two marker-delimited sections:
   feed the notation-collision check (a `\notation` declaration can't reuse
   one of these); the expansions are parsed by the MathML worker at build
   time so MathJax expands them identically to pdflatex.
+
+Both marker sections must currently contain at least one macro each — an
+empty PRE-EXPANSION MACROS or MATH MACROS section is a hard build error.
+(Planned: this constraint relaxes to allow empty sections in v0.2.0.)
 
 Anything outside those markers is real LaTeX (packages, environments,
 site-metadata no-op commands) — the library never parses it.
@@ -165,6 +187,16 @@ src/latexblocks/assets`). The MathML worker script
 (`src/latexblocks/assets/tex2mml-worker.mjs`) ships as plain source, not a
 bundle — it still requires the `mathjax` npm package from whichever
 consumer's build provides it.
+
+The library code is MIT. The one exception is the bundled Latin Modern Math
+webfont (`assets/fonts/LatinModernMath-Regular.woff2`), which is licensed
+under the GUST Font License — its license text ships alongside it in
+`assets/fonts/GUST-FONT-LICENSE.txt`.
+
+Install latexblocks **unpacked** (a regular `pip install`, not a zipapp/pex
+or any zip-imported form): the library resolves its packaged assets as real
+filesystem paths to hand to `node` and `shutil`, which cannot read inside a
+zip.
 
 ## Consumers
 

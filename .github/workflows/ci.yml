@@ -13,5 +13,6 @@ jobs:
       - run: node build.mjs
       - name: committed assets are fresh
         run: git diff --exit-code src/latexblocks/assets
+      - run: test -z "$(git status --porcelain src/latexblocks/assets)"
       - run: pip install -e '.[dev]'
       - run: pytest -q

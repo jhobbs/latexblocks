@@ -71,14 +71,16 @@ def test_scan_duplicate_is_error_with_both_locations():
 
 
 def test_scan_sty_collision_is_error():
-    # \grad lives in latex/mathnotes.sty MATH MACROS
+    # \grad lives in the configured .sty MATH MACROS; the error names the
+    # actual configured sty path, not a hardcoded "mathnotes.sty".
+    from latexblocks.config import sty_path
     with tempfile.TemporaryDirectory() as tmp:
         write(tmp, "a.tex", "\\notation{\\grad}{\\nabla}")
         try:
             scan_content(tmp)
             assert False, "expected NotationError for .sty collision"
         except NotationError as e:
-            assert "grad" in str(e) and "mathnotes.sty" in str(e), str(e)
+            assert "grad" in str(e) and sty_path() in str(e), str(e)
 
 
 def test_scan_rejects_notation_macro_inside_expansion():
@@ -154,6 +156,36 @@ def test_write_notation_sty():
             reset_registry()
 
 
+def test_write_notation_sty_default_path_creates_missing_dir():
+    # Default notation_sty_path is "latex/mathnotes-notation.sty"; writing it
+    # from a cwd with no latex/ dir must create the dir, not raise.
+    from latexblocks.notation import write_notation_sty
+    old_cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        set_registry({"integers": "\\mathbb{Z}"})
+        try:
+            assert write_notation_sty() is True
+            assert os.path.exists(os.path.join(tmp, "latex", "mathnotes-notation.sty"))
+        finally:
+            os.chdir(old_cwd)
+            reset_registry()
+
+
+def test_write_notation_sty_custom_filename_providespackage():
+    # ProvidesPackage name derives from the output filename stem.
+    from latexblocks.notation import write_notation_sty
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "myproj-notation.sty")
+        set_registry({"integers": "\\mathbb{Z}"})
+        try:
+            assert write_notation_sty(out) is True
+            text = open(out).read()
+            assert "\\ProvidesPackage{myproj-notation}" in text
+        finally:
+            reset_registry()
+
+
 if __name__ == "__main__":
     test_scan_finds_declarations()
     print("PASS: scan finds declarations")
@@ -177,3 +209,7 @@ if __name__ == "__main__":
     print("PASS: set_registry test helper")
     test_write_notation_sty()
     print("PASS: write_notation_sty")
+    test_write_notation_sty_default_path_creates_missing_dir()
+    print("PASS: write_notation_sty default path creates dir")
+    test_write_notation_sty_custom_filename_providespackage()
+    print("PASS: write_notation_sty custom filename ProvidesPackage")

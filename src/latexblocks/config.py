@@ -15,7 +15,8 @@ from typing import Optional
 class Config:
     # Prepended to every canonical URL the library emits, as
     # f"{url_prefix}/{canonical_url}". mathnotes: "/mathnotes"; a site
-    # serving at the root uses "".
+    # serving at the root uses "". No trailing slash (normalized away at
+    # configure() time).
     url_prefix: str = ""
     # Scan root (cwd-relative or absolute) for BlockIndex.build_index and
     # the notation registry; also the prefix stripped from file paths when
@@ -48,6 +49,8 @@ def configure(**kwargs) -> Config:
     one field). Also resets every module-level cache/singleton."""
     global _config
     _config = Config(**kwargs)
+    if _config.url_prefix.endswith("/"):
+        _config = dataclasses.replace(_config, url_prefix=_config.url_prefix.rstrip("/"))
     reset_state()
     return _config
 
@@ -61,7 +64,7 @@ def reset_state() -> None:
     notation.reset_registry()
     clear_content_cache()
     clear_page_cache()
-    latex_processor._preexpansion_macros = None
+    latex_processor.clear_preexpansion_cache()
     mathml.reset_converter()
 
 

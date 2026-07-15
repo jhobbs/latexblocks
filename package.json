@@ -1,7 +1,8 @@
 {
-  "name": "app",
+  "name": "latexblocks-frontend-build",
   "version": "1.0.0",
   "description": "",
+  "private": true,
   "main": "index.js",
   "directories": {
     "test": "test"
@@ -11,7 +12,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "mathjax": "^3.2.2"

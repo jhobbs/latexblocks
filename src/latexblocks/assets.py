@@ -2,6 +2,9 @@
 import shutil
 from pathlib import Path
 
+# These are resolved as real filesystem paths handed to node/shutil, so the
+# package must be installed unpacked (a regular pip install, not a zipapp/pex
+# or any zip-imported form — assets inside a zip have no real path).
 _ASSETS = Path(__file__).parent / "assets"
 
 

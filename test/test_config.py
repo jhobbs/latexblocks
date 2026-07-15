@@ -38,6 +38,13 @@ def test_url_prefix_and_content_dir_flow_to_output():
     assert 'src="/gl/plot.png"' in html
 
 
+def test_url_prefix_trailing_slash_normalized():
+    latexblocks.configure(url_prefix="/docs/")
+    assert get_config().url_prefix == "/docs"
+    latexblocks.configure(url_prefix="")
+    assert get_config().url_prefix == ""
+
+
 def test_configure_resets_preexpansion_cache():
     import latexblocks.latex_processor as lp
     from latexblocks.latex_processor import parse_latex_file
