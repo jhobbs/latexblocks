@@ -172,6 +172,7 @@ class MathBlockType(Enum):
     INTUITION = "intuition"
     EXERCISE = "exercise"
     SOLUTION = "solution"
+    EXPLANATION = "explanation"
 
 
 @dataclass
@@ -220,6 +221,7 @@ class MathBlock:
             MathBlockType.INTUITION: "Intuition",
             MathBlockType.EXERCISE: "Exercise",
             MathBlockType.SOLUTION: "Solution",
+            MathBlockType.EXPLANATION: "Explanation",
         }
         return names.get(self.block_type, self.block_type.value.title())
 

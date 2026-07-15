@@ -422,7 +422,7 @@ class _Parser:
                     flush_anchor()
                     anchor = blk
                     proof_target = blk
-                elif name in ("definition", "axiom"):
+                elif name in ("definition", "axiom", "explanation"):
                     flush_anchor()
                     items.append(blk)
                 elif name == "corollary":

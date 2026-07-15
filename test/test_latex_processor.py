@@ -474,6 +474,29 @@ def test_render_math_without_registry_unchanged():
         notation.reset_registry()
 
 
+def test_explanation_env_parses_and_renders():
+    _, doc = parse_latex_file(
+        "\\begin{explanation}[How It Works]\n\\label{how-it-works}\n"
+        "Body prose.\n\\end{explanation}\n")
+    blocks = doc.top_blocks()
+    assert len(blocks) == 1
+    b = blocks[0]
+    assert b.block_type.value == "explanation"
+    assert b.title == "How It Works" and b.label == "how-it-works"
+    assert b.css_class == "math-block math-explanation"
+    assert b.display_name == "Explanation"
+
+
+def test_explanation_never_attaches_to_theorem():
+    _, doc = parse_latex_file(
+        "\\begin{theorem}[T]\n\\label{t}\nStatement.\n\\end{theorem}\n"
+        "\\begin{explanation}\nStandalone gloss.\n\\end{explanation}\n")
+    blocks = doc.top_blocks()
+    # both blocks are top-level: the explanation did NOT become the theorem's child
+    assert [b.block_type.value for b in blocks] == ["theorem", "explanation"]
+    assert blocks[0].children == []
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0
