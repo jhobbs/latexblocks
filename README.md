@@ -12,7 +12,7 @@ passes through.
 ## Install
 
 ```bash
-pip install "latexblocks @ https://github.com/jhobbs/latexblocks/archive/refs/tags/v0.1.0.tar.gz"
+pip install "latexblocks @ https://github.com/jhobbs/latexblocks/archive/refs/tags/v0.1.3.tar.gz"
 ```
 
 There is no PyPI package; install from the tagged GitHub archive above.
