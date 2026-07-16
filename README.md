@@ -9,6 +9,226 @@ at build time via a persistent Node/MathJax worker — no client-side
 typesetting, no markdown layer, one seam (`render_math()`) every math node
 passes through.
 
+## The dialect by example
+
+Blocks *chain*: a proof attaches to the theorem above it, a corollary rides the
+same anchor, a definition links to the definition it builds on, and every
+`\@{label}` reference resolves to a real block anywhere in the content tree.
+Here is one page (`content/algebra/groups.tex`) that exercises the whole chain:
+
+```latex
+\title{Groups}
+
+\begin{definition}[Group]\label{group}\synonyms{groups}
+A \emph{group} is a set $G$ with an associative operation $\ast$ that has an
+identity $e$ and gives every $g \in G$ an inverse $g^{-1}$.
+\end{definition}
+
+\begin{definition}[Abelian Group]\label{abelian-group}
+An abelian group is a \@{group} whose operation also commutes:
+$a \ast b = b \ast a$ for all $a, b \in G$.
+\end{definition}
+
+\begin{theorem}[Uniqueness of Inverses]\label{inverses-unique}
+In an \@{abelian-group}, every element has exactly one inverse.
+\end{theorem}
+
+\begin{proof}
+Suppose $h$ and $h'$ are both inverses of $g$. Then
+$h = h \ast e = h \ast (g \ast h') = (h \ast g) \ast h' = e \ast h' = h'$.
+\end{proof}
+
+\begin{corollary}
+The inverse map $g \mapsto g^{-1}$ is well defined.
+\end{corollary}
+
+\detach
+
+\begin{remark}
+Commutativity drove the argument, but uniqueness of inverses in fact holds in
+every \@{group}.
+\end{remark}
+
+A plural \@{groups} links back to the Group definition through its registered
+synonym.
+```
+
+What chains, and how:
+
+- **`Abelian Group` → `Group`** (definition → definition). Its body writes
+  `\@{group}`, so the card links to the Group definition.
+- **`theorem` → `Abelian Group`** (theorem → definition). The statement writes
+  `\@{abelian-group}`.
+- **`proof`** sits immediately after the theorem, so it is attached *inside* the
+  theorem card, gets the auto-label `proof-of-inverses-unique`, and is closed
+  with an automatic QED `\square`.
+- **`corollary`** follows the proof and attaches to the same theorem anchor
+  (auto-labelled `corollary-5`, the running block counter).
+- **`\detach`** closes that anchor, so the trailing `remark` renders as its own
+  top-level card (auto-label `remark-6`) instead of being swept into the theorem.
+
+Everything below is copied from a real run of the pipeline over that file
+(`url_prefix=""`); HTML is trimmed with `...` but every class, id, and
+attribute shown is exactly what the renderer emits.
+
+### The emitted card nesting
+
+The theorem, its proof, and its corollary render as one nested card; the
+detached remark is a sibling of it:
+
+```html
+<div class="math-block math-theorem" id="inverses-unique" data-label="inverses-unique">
+  <div class="math-block-header">
+    <span class="math-block-type">Theorem:</span>
+    <span class="math-block-title"><a href="/algebra/groups/#inverses-unique">Uniqueness of Inverses</a></span>
+    <span class="block-label-ref">\@{inverses-unique}</span>
+  </div>
+  <div class="math-block-content">
+    <p>In an <a href="/algebra/groups/#abelian-group" class="block-reference" ...>abelian group</a>, every element has exactly one inverse.</p>
+
+    <div class="math-block math-proof math-block-nested" id="proof-of-inverses-unique" data-label="proof-of-inverses-unique">
+      <div class="math-block-header"><span class="math-block-type">Proof</span> ...</div>
+      <div class="math-block-content">
+        <p>Suppose ...</p>
+        <math ...><mi>&#x25FB;</mi></math>   <!-- auto QED \square -->
+      </div>
+    </div>
+
+    <div class="math-block math-corollary math-block-nested" id="corollary-5" data-label="corollary-5">
+      ...
+    </div>
+  </div>
+</div>
+
+<div class="math-block math-remark" id="remark-6" data-label="remark-6">   <!-- detached: not nested -->
+  ...
+</div>
+```
+
+Nested blocks carry the extra `math-block-nested` class; the remark does not,
+because `\detach` broke the chain before it.
+
+### What a reference renders as
+
+`\@{abelian-group}` in the theorem body becomes an `<a>` whose text is the
+target definition's title, **lowercased** for mid-sentence prose:
+
+```html
+\@{abelian-group}  →  <a href="/algebra/groups/#abelian-group" class="block-reference"
+                          data-ref-type="definition" data-ref-label="abelian-group">abelian group</a>
+```
+
+The case is a feature. If you want the title-cased words, spell the reference
+with that capitalization and the case is transferred onto the title verbatim
+(the math inside a title is never re-cased):
+
+```html
+\@{Abelian-Group}  →  <a ... data-ref-label="Abelian-Group">Abelian Group</a>
+\@[the group axioms]{group}  →  <a ... data-ref-label="group">the group axioms</a>
+\dref{theorem:inverses-unique}  →  <a ... data-ref-type="theorem" ...>Uniqueness of Inverses</a>
+\dref{definition:inverses-unique}  →  <span class="block-reference-error" ...>@definition:inverses-unique</span>
+```
+
+The last line shows type validation: `theorem:` matches, `definition:` does not,
+so the reference renders as a visible error rather than a silently wrong link.
+
+### Hover-card (tooltip) data
+
+`render_page()["tooltip_data"]` is a dict keyed by every label the page
+references, carrying the content a hover card shows. Two of this page's
+entries (trimmed) — note the synonym entry, keyed by the plural `groups`,
+which points back at the Group definition:
+
+```python
+{
+  "abelian-group": {
+    "type": "definition",
+    "title": "Abelian Group",
+    "content": '<p>An abelian group is a <a ... data-ref-label="group">group</a> ...</p>',
+    "url": "/algebra/groups/#abelian-group",
+    "is_synonym": False, "synonym_of": None, "synonym_title": None,
+  },
+  "groups": {                        # \synonyms{groups} on the Group definition
+    "type": "definition",
+    "title": "Group",
+    "content": "<p>A <em>group</em> is a set ...</p>",
+    "url": "/algebra/groups/#group",
+    "is_synonym": True, "synonym_of": "Group", "synonym_title": "groups",
+  },
+}
+```
+
+### The "Referenced by" panel
+
+Because both `Abelian Group` and the theorem reach the Group definition, the
+reverse index bakes a backlink panel into the Group card — direct referrers
+plus transitive ones:
+
+```html
+<div class="block-references-section"><details>
+  <summary>Referenced by (2 direct, 1 transitive)</summary>
+  <div class="direct-references"><h4>Direct references:</h4><ul>
+    <li><a href="/algebra/groups/#abelian-group">Abelian Group</a></li>
+    <li><a href="/algebra/groups/#remark-6">remark-6</a></li>
+  </ul></div>
+  <div class="transitive-references"><h4>Transitive (depth 1):</h4><ul>
+    <li><a href="/algebra/groups/#inverses-unique">Uniqueness of Inverses</a></li>
+  </ul></div>
+</details></div>
+```
+
+## Block types
+
+Fourteen environments, grouped by how they chain. An *anchor* opens an
+attachment context; *attachments* fall into the currently-open anchor; a
+*standalone* block closes any open anchor and stands on its own.
+
+| Environment | Behavior | Chains by |
+|---|---|---|
+| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` auto-labels from its title and may declare `\synonyms`; `explanation` is free-standing expository prose. |
+| `theorem`, `lemma`, `proposition`, `exercise` | **anchor** | Open a fresh attachment context that following proofs / notes fall into. |
+| `corollary` | **attach-or-anchor** | Attaches to the open anchor if there is one; otherwise becomes an anchor itself. |
+| `proof` | **attachment** → statement | Attaches inside the current `theorem`/`lemma`/`proposition`/`corollary` (or `exercise`); auto-labels `proof-of-<label>`, appends an automatic QED `\square`. Errors if no statement precedes it. |
+| `solution` | **attachment** → exercise | Attaches inside the current block only when it is an `exercise`; errors otherwise. |
+| `note`, `remark`, `example`, `intuition` | **attachment** → any open anchor | Attach to the open anchor if one is active, else emit standalone (never an error). |
+
+`\detach` (a bare macro, not an environment) closes the open anchor early, so
+the next attachable block starts its own card instead of joining the previous
+one — as the `remark` above does.
+
+Auto-labels: a titled definition normalizes its title (`Abelian Group` →
+`abelian-group`); an attached block derives from its parent (`proof-of-…`,
+`<parent>-<type>`); anything else falls back to `<type>-<counter>`.
+
+## Dialect cheat sheet
+
+References and page directives the parser understands (verify any of these
+against `latex_processor.py`):
+
+| Syntax | Meaning |
+|---|---|
+| `\@{label}` | Reference a block; auto link text from its title/snippet. Preferred shorthand — an exact alias of `\dref`. |
+| `\dref{label}` | Same as `\@{label}`. |
+| `\@[custom text]{label}` / `\dref[custom text]{label}` | Reference with explicit link text. |
+| `\dref{type:label}` | Reference with type validation; renders a `block-reference-error` span if the target's type differs. |
+| `\pagelink{slug}` / `\pagelink[text]{slug}` | Link to a page by slug, resolved through the URL mapper. |
+| `\dembed{label}` | Transclude the target block's full rendered card inline. |
+| `\notation{\macro}{expansion}` | At the top of a block: declare a site-wide math macro whose every use links back to this block. |
+| `\synonyms{a, b}` | At the top of a **definition**: register alternate titles (also auto-plurals/singulars) as reference aliases. |
+| `\tags{a, b}` | At the top of a block: attach classification chips. |
+| `\label{label}` | At the top of a block: set its explicit label (else auto-generated). |
+| `\title{...}`, `\description{...}`, `\slug{...}` | Page metadata (all optional; `\slug` overrides the URL derived from the path). |
+
+Standard LaTeX also works and renders to the obvious HTML: `\section` /
+`\subsection` / `\subsubsection` / `\paragraph` / `\subparagraph`,
+`itemize` / `enumerate`, `tabular` (l/c/r columns), `verbatim` and
+`lstlisting` (`[language=...]` becomes a `language-*` class), `\href{url}{text}`,
+`\includegraphics[alt=...,width=...]{path}`, the inline styles
+`\emph` / `\textit` / `\textbf` / `\texttt`, and of course math — `$...$`
+inline and `\[...\]` (or the `\bal ... \eal` aligned shorthand) display.
+Anything the dialect does not recognize is a loud build error with `file:line`,
+never silently dropped.
+
 ## Install
 
 ```bash
