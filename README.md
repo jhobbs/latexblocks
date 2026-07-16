@@ -120,7 +120,9 @@ target definition's title, **lowercased** for mid-sentence prose:
 
 The case is a feature. If you want the title-cased words, spell the reference
 with that capitalization and the case is transferred onto the title verbatim
-(the math inside a title is never re-cased):
+(the math inside a title is never re-cased). The four renders below are also
+real resolver output, but from separate runs against the same labels — the
+page above doesn't write them:
 
 ```html
 \@{Abelian-Group}  →  <a ... data-ref-label="Abelian-Group">Abelian Group</a>
@@ -212,7 +214,7 @@ against `latex_processor.py`):
 | `\@[custom text]{label}` / `\dref[custom text]{label}` | Reference with explicit link text. |
 | `\dref{type:label}` | Reference with type validation; renders a `block-reference-error` span if the target's type differs. |
 | `\pagelink{slug}` / `\pagelink[text]{slug}` | Link to a page by slug, resolved through the URL mapper. |
-| `\dembed{label}` | Transclude the target block's full rendered card inline. |
+| `\dembed{label}` | Transclude the target block's full rendered card inline. Page level only — inside a block body it can fail with an order-dependent build error if the target hasn't rendered yet. |
 | `\notation{\macro}{expansion}` | At the top of a block: declare a site-wide math macro whose every use links back to this block. |
 | `\synonyms{a, b}` | At the top of a **definition**: register alternate titles (also auto-plurals/singulars) as reference aliases. |
 | `\tags{a, b}` | At the top of a block: attach classification chips. |
