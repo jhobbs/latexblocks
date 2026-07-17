@@ -175,6 +175,7 @@ class MathBlockType(Enum):
     EXPLANATION = "explanation"
     RESULT = "result"
     INTENT = "intent"
+    BACKGROUND = "background"
     HYPOTHESIS = "hypothesis"
     CONCLUSION = "conclusion"
 

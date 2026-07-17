@@ -514,7 +514,7 @@ def test_report_env_types_parse_and_render():
     # intent / hypothesis / conclusion: the experiment-report block family,
     # all behaving like result (standalone item, title + label)
     for env, display in (("intent", "Intent"), ("hypothesis", "Hypothesis"),
-                         ("conclusion", "Conclusion")):
+                         ("conclusion", "Conclusion"), ("background", "Background")):
         _, doc = parse_latex_file(
             f"\\begin{{{env}}}[Core statement]\n\\label{{exp-{env}}}\n"
             f"Body prose.\n\\end{{{env}}}\n")

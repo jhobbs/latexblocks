@@ -38,6 +38,7 @@
   --base-math-explanation: oklch(55% 0.09 200);   /* Teal */
   --base-math-result: oklch(58% 0.12 70);         /* Amber */
   --base-math-intent: oklch(58% 0.10 25);         /* Coral */
+  --base-math-background: oklch(50% 0.04 80);     /* Stone */
   --base-math-hypothesis: oklch(55% 0.14 310);    /* Violet */
   --base-math-conclusion: oklch(55% 0.13 345);    /* Magenta */
   
@@ -107,6 +108,7 @@
   --color-explanation: var(--base-math-explanation);
   --color-result: var(--base-math-result);
   --color-intent: var(--base-math-intent);
+  --color-background: var(--base-math-background);
   --color-hypothesis: var(--base-math-hypothesis);
   --color-conclusion: var(--base-math-conclusion);
   --color-theorem: var(--base-math-theorem);
@@ -127,6 +129,7 @@
   --color-type-explanation: oklch(55% 0.09 200);
   --color-type-result: oklch(58% 0.12 70);
   --color-type-intent: oklch(58% 0.10 25);
+  --color-type-background: oklch(50% 0.04 80);
   --color-type-hypothesis: oklch(55% 0.14 310);
   --color-type-conclusion: oklch(55% 0.13 345);
   --color-type-theorem: var(--base-error);
@@ -142,6 +145,7 @@
   --color-nested-explanation: color-mix(in oklch, var(--color-explanation) 3%, transparent);
   --color-nested-result: color-mix(in oklch, var(--color-result) 3%, transparent);
   --color-nested-intent: color-mix(in oklch, var(--color-intent) 3%, transparent);
+  --color-nested-background: color-mix(in oklch, var(--color-background) 3%, transparent);
   --color-nested-hypothesis: color-mix(in oklch, var(--color-hypothesis) 3%, transparent);
   --color-nested-conclusion: color-mix(in oklch, var(--color-conclusion) 3%, transparent);
   --color-nested-theorem: color-mix(in oklch, var(--color-theorem) 3%, transparent);
@@ -392,6 +396,11 @@ a.block-reference:has(math):hover {
   &.math-intent {
     border-color: var(--color-intent);
     background-color: color-mix(in oklch, var(--color-intent), transparent 95%);
+  }
+  
+  &.math-background {
+    border-color: var(--color-background);
+    background-color: color-mix(in oklch, var(--color-background), transparent 95%);
   }
   
   &.math-hypothesis {
@@ -851,6 +860,10 @@ a.block-reference:has(math):hover {
   color: var(--color-type-intent);
 }
 
+.math-tooltip-content.math-background .math-tooltip-type {
+  color: var(--color-type-background);
+}
+
 .math-tooltip-content.math-hypothesis .math-tooltip-type {
   color: var(--color-type-hypothesis);
 }
@@ -903,6 +916,10 @@ a.block-reference:has(math):hover {
   
   .math-tooltip-content.math-intent .math-tooltip-type {
     color: var(--color-type-intent);
+  }
+  
+  .math-tooltip-content.math-background .math-tooltip-type {
+    color: var(--color-type-background);
   }
   
   .math-tooltip-content.math-hypothesis .math-tooltip-type {

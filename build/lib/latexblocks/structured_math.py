@@ -174,6 +174,9 @@ class MathBlockType(Enum):
     SOLUTION = "solution"
     EXPLANATION = "explanation"
     RESULT = "result"
+    INTENT = "intent"
+    HYPOTHESIS = "hypothesis"
+    CONCLUSION = "conclusion"
 
 
 @dataclass
