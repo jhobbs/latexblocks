@@ -178,6 +178,8 @@ class MathBlockType(Enum):
     BACKGROUND = "background"
     HYPOTHESIS = "hypothesis"
     CONCLUSION = "conclusion"
+    VARIANT = "variant"
+    CLAIM = "claim"
 
 
 @dataclass

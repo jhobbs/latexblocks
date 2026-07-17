@@ -510,11 +510,36 @@ def test_result_env_parses_and_renders():
     assert b.display_name == "Result"
 
 
+def test_variant_and_claim_envs_parse_and_render():
+    for env, label in (("variant", "mirror-v1-variant-s2-e4-blk"),
+                       ("claim", "mirror-v1-claim-blk-2to0-mean-final")):
+        _, doc = parse_latex_file(
+            f"\\begin{{{env}}}[Some title]\n\\label{{{label}}}\n"
+            f"Body text.\n\\end{{{env}}}\n")
+        blocks = doc.top_blocks()
+        assert len(blocks) == 1
+        b = blocks[0]
+        assert b.block_type.value == env
+        assert b.title == "Some title" and b.label == label
+        assert b.css_class == f"math-block math-{env}"
+        assert b.display_name == env.title()
+
+
+def test_variant_and_claim_never_attach_to_theorem():
+    for env in ("variant", "claim"):
+        _, doc = parse_latex_file(
+            "\\begin{theorem}\nT.\n\\end{theorem}\n"
+            f"\\begin{{{env}}}\nB.\n\\end{{{env}}}\n")
+        blocks = doc.top_blocks()
+        assert len(blocks) == 2, f"{env} attached to preceding theorem"
+
+
 def test_report_env_types_parse_and_render():
     # intent / hypothesis / conclusion: the experiment-report block family,
     # all behaving like result (standalone item, title + label)
     for env, display in (("intent", "Intent"), ("hypothesis", "Hypothesis"),
-                         ("conclusion", "Conclusion"), ("background", "Background")):
+                         ("conclusion", "Conclusion"), ("background", "Background"),
+                         ("variant", "Variant"), ("claim", "Claim")):
         _, doc = parse_latex_file(
             f"\\begin{{{env}}}[Core statement]\n\\label{{exp-{env}}}\n"
             f"Body prose.\n\\end{{{env}}}\n")

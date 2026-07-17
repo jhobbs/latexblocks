@@ -39,7 +39,9 @@
   --base-math-background: oklch(50% 0.04 80);     /* Stone */
   --base-math-hypothesis: oklch(55% 0.14 310);    /* Violet */
   --base-math-conclusion: oklch(55% 0.13 345);    /* Magenta */
-  
+  --base-math-variant: oklch(58% 0.10 175);       /* Teal-cyan */
+  --base-math-claim: oklch(50% 0.05 225);         /* Slate */
+
   /* Neutrals for light mode */
   --base-neutral-0: oklch(100% 0 0);        /* Pure white */
   --base-neutral-100: oklch(98% 0.01 100);  /* Off-white */
@@ -109,6 +111,8 @@
   --color-background: var(--base-math-background);
   --color-hypothesis: var(--base-math-hypothesis);
   --color-conclusion: var(--base-math-conclusion);
+  --color-variant: var(--base-math-variant);
+  --color-claim: var(--base-math-claim);
   --color-theorem: var(--base-math-theorem);
   --color-lemma: oklch(58% 0.14 241);
   --color-proposition: oklch(62% 0.12 230);
@@ -130,6 +134,8 @@
   --color-type-background: oklch(50% 0.04 80);
   --color-type-hypothesis: oklch(55% 0.14 310);
   --color-type-conclusion: oklch(55% 0.13 345);
+  --color-type-variant: oklch(58% 0.10 175);
+  --color-type-claim: oklch(50% 0.05 225);
   --color-type-theorem: var(--base-error);
   --color-type-proposition: oklch(55% 0.18 300);
   --color-type-lemma: var(--base-warning);
@@ -146,6 +152,8 @@
   --color-nested-background: color-mix(in oklch, var(--color-background) 3%, transparent);
   --color-nested-hypothesis: color-mix(in oklch, var(--color-hypothesis) 3%, transparent);
   --color-nested-conclusion: color-mix(in oklch, var(--color-conclusion) 3%, transparent);
+  --color-nested-variant: color-mix(in oklch, var(--color-variant) 3%, transparent);
+  --color-nested-claim: color-mix(in oklch, var(--color-claim) 3%, transparent);
   --color-nested-theorem: color-mix(in oklch, var(--color-theorem) 3%, transparent);
   --color-nested-lemma: color-mix(in oklch, var(--color-lemma) 3%, transparent);
   --color-nested-proposition: color-mix(in oklch, var(--color-proposition) 3%, transparent);
@@ -401,6 +409,14 @@ a.block-reference:has(math):hover {
 .math-block.math-conclusion {
     border-color: var(--color-conclusion);
     background-color: color-mix(in oklch, var(--color-conclusion), transparent 95%);
+  }
+.math-block.math-variant {
+    border-color: var(--color-variant);
+    background-color: color-mix(in oklch, var(--color-variant), transparent 95%);
+  }
+.math-block.math-claim {
+    border-color: var(--color-claim);
+    background-color: color-mix(in oklch, var(--color-claim), transparent 95%);
   }
 .math-block.math-theorem {
     border-color: var(--color-theorem);
@@ -843,6 +859,14 @@ a.block-reference:has(math):hover {
   color: var(--color-type-conclusion);
 }
 
+.math-tooltip-content.math-variant .math-tooltip-type {
+  color: var(--color-type-variant);
+}
+
+.math-tooltip-content.math-claim .math-tooltip-type {
+  color: var(--color-type-claim);
+}
+
 .math-tooltip-content.math-theorem .math-tooltip-type {
   color: var(--color-type-theorem);
 }
@@ -900,7 +924,15 @@ a.block-reference:has(math):hover {
   .math-tooltip-content.math-conclusion .math-tooltip-type {
     color: var(--color-type-conclusion);
   }
-  
+
+  .math-tooltip-content.math-variant .math-tooltip-type {
+    color: var(--color-type-variant);
+  }
+
+  .math-tooltip-content.math-claim .math-tooltip-type {
+    color: var(--color-type-claim);
+  }
+
   .math-tooltip-content.math-theorem .math-tooltip-type {
     color: var(--color-type-theorem);
   }
