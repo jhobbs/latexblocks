@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "latexblocks"
-version = "0.1.3"
+version = "0.1.4"
 description = "LaTeX-dialect structured math blocks -> HTML with cross-references, tooltips, and build-time MathML"
 readme = "README.md"
 requires-python = ">=3.14"

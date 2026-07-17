@@ -497,6 +497,29 @@ def test_explanation_never_attaches_to_theorem():
     assert blocks[0].children == []
 
 
+def test_result_env_parses_and_renders():
+    _, doc = parse_latex_file(
+        "\\begin{result}[The floor-zero collapse]\n\\label{slopesweep-collapse}\n"
+        "Any schedule that ends at uniform loses the rule it built.\n\\end{result}\n")
+    blocks = doc.top_blocks()
+    assert len(blocks) == 1
+    b = blocks[0]
+    assert b.block_type.value == "result"
+    assert b.title == "The floor-zero collapse" and b.label == "slopesweep-collapse"
+    assert b.css_class == "math-block math-result"
+    assert b.display_name == "Result"
+
+
+def test_result_never_attaches_to_theorem():
+    _, doc = parse_latex_file(
+        "\\begin{theorem}[T]\n\\label{t}\nStatement.\n\\end{theorem}\n"
+        "\\begin{result}\nStandalone finding.\n\\end{result}\n")
+    blocks = doc.top_blocks()
+    # both blocks are top-level: the result did NOT become the theorem's child
+    assert [b.block_type.value for b in blocks] == ["theorem", "result"]
+    assert blocks[0].children == []
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0

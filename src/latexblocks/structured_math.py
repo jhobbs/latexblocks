@@ -173,6 +173,7 @@ class MathBlockType(Enum):
     EXERCISE = "exercise"
     SOLUTION = "solution"
     EXPLANATION = "explanation"
+    RESULT = "result"
 
 
 @dataclass
