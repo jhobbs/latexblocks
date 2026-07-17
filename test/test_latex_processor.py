@@ -510,6 +510,32 @@ def test_result_env_parses_and_renders():
     assert b.display_name == "Result"
 
 
+def test_report_env_types_parse_and_render():
+    # intent / hypothesis / conclusion: the experiment-report block family,
+    # all behaving like result (standalone item, title + label)
+    for env, display in (("intent", "Intent"), ("hypothesis", "Hypothesis"),
+                         ("conclusion", "Conclusion")):
+        _, doc = parse_latex_file(
+            f"\\begin{{{env}}}[Core statement]\n\\label{{exp-{env}}}\n"
+            f"Body prose.\n\\end{{{env}}}\n")
+        blocks = doc.top_blocks()
+        assert len(blocks) == 1
+        b = blocks[0]
+        assert b.block_type.value == env
+        assert b.title == "Core statement" and b.label == f"exp-{env}"
+        assert b.css_class == f"math-block math-{env}"
+        assert b.display_name == display
+
+
+def test_hypothesis_never_attaches_to_theorem():
+    _, doc = parse_latex_file(
+        "\\begin{theorem}[T]\n\\label{t}\nStatement.\n\\end{theorem}\n"
+        "\\begin{hypothesis}\nStandalone expectation.\n\\end{hypothesis}\n")
+    blocks = doc.top_blocks()
+    assert [b.block_type.value for b in blocks] == ["theorem", "hypothesis"]
+    assert blocks[0].children == []
+
+
 def test_result_never_attaches_to_theorem():
     _, doc = parse_latex_file(
         "\\begin{theorem}[T]\n\\label{t}\nStatement.\n\\end{theorem}\n"

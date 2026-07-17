@@ -35,6 +35,9 @@
   --base-math-note: oklch(50% 0.06 250);          /* Muted blue */
   --base-math-explanation: oklch(55% 0.09 200);   /* Teal */
   --base-math-result: oklch(58% 0.12 70);         /* Amber */
+  --base-math-intent: oklch(58% 0.10 25);         /* Coral */
+  --base-math-hypothesis: oklch(55% 0.14 310);    /* Violet */
+  --base-math-conclusion: oklch(55% 0.13 345);    /* Magenta */
   
   /* Neutrals for light mode */
   --base-neutral-0: oklch(100% 0 0);        /* Pure white */
@@ -101,6 +104,9 @@
   --color-definition: var(--base-math-definition);
   --color-explanation: var(--base-math-explanation);
   --color-result: var(--base-math-result);
+  --color-intent: var(--base-math-intent);
+  --color-hypothesis: var(--base-math-hypothesis);
+  --color-conclusion: var(--base-math-conclusion);
   --color-theorem: var(--base-math-theorem);
   --color-lemma: oklch(58% 0.14 241);
   --color-proposition: oklch(62% 0.12 230);
@@ -118,6 +124,9 @@
   --color-type-definition: oklch(60% 0.17 252);
   --color-type-explanation: oklch(55% 0.09 200);
   --color-type-result: oklch(58% 0.12 70);
+  --color-type-intent: oklch(58% 0.10 25);
+  --color-type-hypothesis: oklch(55% 0.14 310);
+  --color-type-conclusion: oklch(55% 0.13 345);
   --color-type-theorem: var(--base-error);
   --color-type-proposition: oklch(55% 0.18 300);
   --color-type-lemma: var(--base-warning);
@@ -130,6 +139,9 @@
   --color-nested-definition: color-mix(in oklch, var(--color-definition) 3%, transparent);
   --color-nested-explanation: color-mix(in oklch, var(--color-explanation) 3%, transparent);
   --color-nested-result: color-mix(in oklch, var(--color-result) 3%, transparent);
+  --color-nested-intent: color-mix(in oklch, var(--color-intent) 3%, transparent);
+  --color-nested-hypothesis: color-mix(in oklch, var(--color-hypothesis) 3%, transparent);
+  --color-nested-conclusion: color-mix(in oklch, var(--color-conclusion) 3%, transparent);
   --color-nested-theorem: color-mix(in oklch, var(--color-theorem) 3%, transparent);
   --color-nested-lemma: color-mix(in oklch, var(--color-lemma) 3%, transparent);
   --color-nested-proposition: color-mix(in oklch, var(--color-proposition) 3%, transparent);
@@ -369,6 +381,18 @@ a.block-reference:has(math):hover {
 .math-block.math-result {
     border-color: var(--color-result);
     background-color: color-mix(in oklch, var(--color-result), transparent 95%);
+  }
+.math-block.math-intent {
+    border-color: var(--color-intent);
+    background-color: color-mix(in oklch, var(--color-intent), transparent 95%);
+  }
+.math-block.math-hypothesis {
+    border-color: var(--color-hypothesis);
+    background-color: color-mix(in oklch, var(--color-hypothesis), transparent 95%);
+  }
+.math-block.math-conclusion {
+    border-color: var(--color-conclusion);
+    background-color: color-mix(in oklch, var(--color-conclusion), transparent 95%);
   }
 .math-block.math-theorem {
     border-color: var(--color-theorem);
@@ -795,6 +819,18 @@ a.block-reference:has(math):hover {
   color: var(--color-type-result);
 }
 
+.math-tooltip-content.math-intent .math-tooltip-type {
+  color: var(--color-type-intent);
+}
+
+.math-tooltip-content.math-hypothesis .math-tooltip-type {
+  color: var(--color-type-hypothesis);
+}
+
+.math-tooltip-content.math-conclusion .math-tooltip-type {
+  color: var(--color-type-conclusion);
+}
+
 .math-tooltip-content.math-theorem .math-tooltip-type {
   color: var(--color-type-theorem);
 }
@@ -835,6 +871,18 @@ a.block-reference:has(math):hover {
   
   .math-tooltip-content.math-result .math-tooltip-type {
     color: var(--color-type-result);
+  }
+  
+  .math-tooltip-content.math-intent .math-tooltip-type {
+    color: var(--color-type-intent);
+  }
+  
+  .math-tooltip-content.math-hypothesis .math-tooltip-type {
+    color: var(--color-type-hypothesis);
+  }
+  
+  .math-tooltip-content.math-conclusion .math-tooltip-type {
+    color: var(--color-type-conclusion);
   }
   
   .math-tooltip-content.math-theorem .math-tooltip-type {
