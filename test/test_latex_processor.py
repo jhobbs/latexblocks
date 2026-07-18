@@ -571,6 +571,61 @@ def test_result_never_attaches_to_theorem():
     assert blocks[0].children == []
 
 
+def test_metadata_title_decodes_char_escapes():
+    m = meta("\\title{s5\\_e0}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "s5_e0"
+
+
+def test_metadata_title_decodes_percent_and_underscore():
+    m = meta("\\title{50\\%_dropout}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "50%_dropout"
+
+
+def test_metadata_title_decodes_ampersand_and_braces():
+    m = meta("\\title{a \\& b\\_c \\{d\\} \\#e \\$f}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "a & b_c {d} #e $f"
+
+
+def test_metadata_title_decodes_textbackslash_and_tilde():
+    m = meta("\\title{x\\textbackslash y\\textasciitilde z}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "x\\y~z"
+
+
+def test_metadata_title_keeps_specials_literal():
+    m = meta("\\title{a--b}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "a--b"
+
+
+def test_metadata_title_rejects_math():
+    try:
+        meta("\\title{bad $x$ title}\n\\begin{document}x\\end{document}")
+        assert False, "expected LatexDialectError for math in \\title"
+    except LatexDialectError as e:
+        assert "plain text" in str(e)
+
+
+def test_metadata_title_rejects_href():
+    try:
+        meta("\\title{bad \\href{http://x}{y} title}\n\\begin{document}x\\end{document}")
+        assert False, "expected LatexDialectError for \\href in \\title"
+    except LatexDialectError as e:
+        assert "plain text" in str(e)
+
+
+def test_block_optional_title_decodes_char_escapes():
+    _, doc = parse_latex_file(
+        "\\begin{result}[a \\& b\\_c]\n\\label{r1}\nBody.\n\\end{result}\n")
+    b = doc.top_blocks()[0]
+    assert b.title == "a & b_c" and b.label == "r1"
+
+
+def test_label_decodes_char_escapes():
+    _, doc = parse_latex_file(
+        "\\begin{theorem}[T]\n\\label{x\\_y}\nBody.\n\\end{theorem}\n")
+    b = doc.top_blocks()[0]
+    assert b.label == "x_y"
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0

@@ -146,6 +146,14 @@ _STYLE_MACROS = {"emph": "em", "textit": "em", "textbf": "strong", "texttt": "co
 _ISLAND = "\x01"  # wraps block-level HTML islands inside a prose stream
 _SECTION_LEVELS = {"section": 1, "subsection": 2, "subsubsection": 3, "paragraph": 4, "subparagraph": 5}
 _ESCAPED_CHAR_MACROS = {"%", "&", "#", "_", "{", "}", " "}
+# Standard LaTeX character-escape macros decoded to their literal characters
+# in metadata arguments (_chars_arg): \_ \% \& \# \$ \{ \} plus the two named
+# text-mode escapes. Anything else stays a hard error there — metadata values
+# (titles, labels, ...) are plain text, never math or markup.
+_CHARS_ARG_ESCAPES = {
+    "_": "_", "%": "%", "&": "&", "#": "#", "$": "$", "{": "{", "}": "}",
+    "textbackslash": "\\", "textasciitilde": "~",
+}
 _TABULAR_ALIGN = {"l": "left", "c": "center", "r": "right"}
 
 _THEOREM_LIKE = {"theorem", "lemma", "proposition"}
@@ -305,21 +313,34 @@ class _Parser:
         raise LatexDialectError(f"{self.filepath}:{line}: {message}")
 
     def _chars_arg(self, macro_node) -> str:
-        """Plain-text mandatory (last) argument of a macro, e.g. \\label{...}."""
+        """Plain-text mandatory (last) argument of a macro, e.g. \\label{...}.
+
+        Standard LaTeX character-escape macros (\\_ \\% \\& \\# \\$ \\{ \\}
+        \\textbackslash \\textasciitilde) decode to their literal characters,
+        and specials nodes (--, ---, `, ', ~, ...) decode to their literal
+        source text. Any other macro, environment, or math node still raises
+        — metadata values are plain text, never math or markup."""
         args = macro_node.nodeargd.argnlist if macro_node.nodeargd else []
         group = args[-1] if args else None
         if group is None:
             self._err(macro_node, f"\\{macro_node.macroname} requires an argument")
+        parts: List[str] = []
         for n in group.nodelist:
-            if not isinstance(n, (LatexCharsNode, LatexCommentNode)):
+            if isinstance(n, LatexCharsNode):
+                parts.append(n.chars)
+            elif isinstance(n, LatexCommentNode):
+                continue
+            elif isinstance(n, LatexSpecialsNode):
+                parts.append(n.specials_chars)
+            elif isinstance(n, LatexMacroNode) and n.macroname in _CHARS_ARG_ESCAPES:
+                parts.append(_CHARS_ARG_ESCAPES[n.macroname])
+            else:
                 self._err(
                     macro_node,
                     f"\\{macro_node.macroname} argument must be plain text "
                     f"(no math or commands)",
                 )
-        text = "".join(
-            n.chars for n in group.nodelist if isinstance(n, LatexCharsNode)
-        ).strip()
+        text = "".join(parts).strip()
         if not text:
             self._err(macro_node, f"\\{macro_node.macroname} argument must be plain text")
         return text

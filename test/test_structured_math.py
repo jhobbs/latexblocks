@@ -55,6 +55,17 @@ def test_generate_singular():
     assert MathBlock.generate_singular("") is None
 
 
+def test_auto_label_from_title_with_percent_and_underscore_is_legal():
+    """A title containing decoded escape chars (e.g. from \\title{50\\%_dropout})
+    must still normalize to a label matching latex_processor._LABEL_RE
+    (^[A-Za-z0-9][A-Za-z0-9_:-]*$) — normalize_label_from_title strips
+    everything but [a-z0-9-], so '%' and '_' both drop out cleanly."""
+    import re
+    label = MathBlock.normalize_label_from_title("50%_dropout")
+    assert re.match(r"^[A-Za-z0-9][A-Za-z0-9_:-]*$", label), label
+    assert label == "50dropout"
+
+
 def test_finalize_definition_singular_synonyms():
     d = blk("definition", title="Integers")
     finalize_blocks([d])
