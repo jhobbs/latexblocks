@@ -28,6 +28,14 @@
   --base-info: oklch(64% 0.04 220);         /* Light blue */
   
   /* Math content type colors */
+  /* Hue picks here must clear ALL hue-bearing block colors in this file, not
+     just this base-math-* set — including --color-intuition (180),
+     --color-proposition (230), --color-axiom (280), and --color-lemma (241)
+     down in the derived-colors block below. --base-math-variant was nudged
+     from 175 to 160 (2026-07) to clear --color-intuition's 180 by more than
+     a nose; --base-math-claim's 225 sits close to --color-proposition's 230
+     but was judged acceptable as-is (claim's chroma 0.05 reads near-neutral,
+     so the two don't compete perceptually) — left unchanged. */
   --base-math-definition: oklch(56% 0.13 252);    /* Blue */
   --base-math-theorem: oklch(60% 0.15 142);       /* Green */
   --base-math-proof: oklch(40% 0.05 250);         /* Dark blue */
@@ -39,7 +47,7 @@
   --base-math-background: oklch(50% 0.04 80);     /* Stone */
   --base-math-hypothesis: oklch(55% 0.14 310);    /* Violet */
   --base-math-conclusion: oklch(55% 0.13 345);    /* Magenta */
-  --base-math-variant: oklch(58% 0.10 175);       /* Teal-cyan */
+  --base-math-variant: oklch(58% 0.10 160);       /* Teal-cyan */
   --base-math-claim: oklch(50% 0.05 225);         /* Slate */
 
   /* Neutrals for light mode */
@@ -134,7 +142,7 @@
   --color-type-background: oklch(50% 0.04 80);
   --color-type-hypothesis: oklch(55% 0.14 310);
   --color-type-conclusion: oklch(55% 0.13 345);
-  --color-type-variant: oklch(58% 0.10 175);
+  --color-type-variant: oklch(58% 0.10 160);
   --color-type-claim: oklch(50% 0.05 225);
   --color-type-theorem: var(--base-error);
   --color-type-proposition: oklch(55% 0.18 300);

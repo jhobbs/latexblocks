@@ -319,13 +319,27 @@ class _Parser:
         \\textbackslash \\textasciitilde) decode to their literal characters,
         and specials nodes (--, ---, `, ', ~, ...) decode to their literal
         source text. Any other macro, environment, or math node still raises
-        — metadata values are plain text, never math or markup."""
+        — metadata values are plain text, never math or markup.
+
+        \\textbackslash and \\textasciitilde take no arguments of their own
+        (pylatexenc's default context gives them an empty argspec), so the
+        standard authoring idiom of following them with an empty group to
+        stop gobbling (\\textbackslash{}, \\textasciitilde{}) arrives as a
+        separate, empty LatexGroupNode immediately after the macro node in
+        this same nodelist — not as part of the macro's own args. Tolerate
+        exactly that shape; a non-empty group still raises, same as any
+        other unrecognized construct here."""
         args = macro_node.nodeargd.argnlist if macro_node.nodeargd else []
         group = args[-1] if args else None
         if group is None:
             self._err(macro_node, f"\\{macro_node.macroname} requires an argument")
         parts: List[str] = []
+        skip_empty_group = False
         for n in group.nodelist:
+            if skip_empty_group:
+                skip_empty_group = False
+                if isinstance(n, LatexGroupNode) and not n.nodelist:
+                    continue
             if isinstance(n, LatexCharsNode):
                 parts.append(n.chars)
             elif isinstance(n, LatexCommentNode):
@@ -334,6 +348,8 @@ class _Parser:
                 parts.append(n.specials_chars)
             elif isinstance(n, LatexMacroNode) and n.macroname in _CHARS_ARG_ESCAPES:
                 parts.append(_CHARS_ARG_ESCAPES[n.macroname])
+                if n.macroname in ("textbackslash", "textasciitilde"):
+                    skip_empty_group = True
             else:
                 self._err(
                     macro_node,

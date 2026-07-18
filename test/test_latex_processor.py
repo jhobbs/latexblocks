@@ -591,6 +591,37 @@ def test_metadata_title_decodes_textbackslash_and_tilde():
     assert m["title"] == "x\\y~z"
 
 
+def test_metadata_title_decodes_brace_terminated_textbackslash():
+    m = meta("\\title{a\\textbackslash{}b}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "a\\b"
+
+
+def test_metadata_title_decodes_brace_terminated_textasciitilde():
+    m = meta("\\title{x\\textasciitilde{}y}\n\\begin{document}x\\end{document}")
+    assert m["title"] == "x~y"
+
+
+def test_metadata_title_rejects_nonempty_group_after_textbackslash():
+    try:
+        meta("\\title{a\\textbackslash{bc}d}\n\\begin{document}x\\end{document}")
+        assert False, "expected LatexDialectError for non-empty group after \\textbackslash"
+    except LatexDialectError as e:
+        assert "plain text" in str(e)
+
+
+def test_block_bracket_title_textbackslash_still_unsupported():
+    """Regression pin: bracket-arg block titles route through _prose/_macro,
+    a separate code path from _chars_arg's escape-table decoding. _macro has
+    no \\textbackslash case (unlike \\textasciitilde, which it does handle),
+    so this was already a LatexDialectError before the _chars_arg brace-group
+    fix and remains one after it — unaffected regression-wise."""
+    try:
+        page("\\begin{result}[a\\textbackslash{}b]\nBody.\n\\end{result}")
+        assert False, "expected LatexDialectError for \\textbackslash in a bracket title"
+    except LatexDialectError as e:
+        assert "textbackslash" in str(e)
+
+
 def test_metadata_title_keeps_specials_literal():
     m = meta("\\title{a--b}\n\\begin{document}x\\end{document}")
     assert m["title"] == "a--b"
