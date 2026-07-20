@@ -657,6 +657,35 @@ def test_label_decodes_char_escapes():
     assert b.label == "x_y"
 
 
+def test_llm_inline_marks_span():
+    assert prose("Before \\llm{drafted text} after.") == (
+        '<p>Before <span data-ai-disclosure="ai-generated">drafted text'
+        '</span> after.</p>')
+
+
+def test_llm_inline_model_attr():
+    html = prose("\\llm[claude-fable-5]{drafted}.")
+    assert ('<span data-ai-disclosure="ai-generated" '
+            'data-ai-model="claude-fable-5">drafted</span>') in html
+
+
+def test_llm_inline_styles_nest_inside():
+    html = prose("\\llm{plain \\emph{stressed} plain}")
+    assert '<em>stressed</em>' in html and 'data-ai-disclosure' in html
+
+
+def test_llm_inline_empty_is_error():
+    expect_error("\\llm{  }", "empty")
+
+
+def test_llm_inline_does_not_nest():
+    expect_error("\\llm{a \\llm{b} c}", "nest")
+
+
+def test_llm_inline_bad_model_id():
+    expect_error("\\llm[claude fable]{x}", "model id")
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0

@@ -159,6 +159,7 @@ _TABULAR_ALIGN = {"l": "left", "c": "center", "r": "right"}
 _THEOREM_LIKE = {"theorem", "lemma", "proposition"}
 _ATTACHABLE_NOTES = {"note", "remark", "example", "intuition"}
 _LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_:-]*$")
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
 def _esc(text: str) -> str:
@@ -253,6 +254,7 @@ def _latex_context():
             macrospec.MacroSpec("tags", "{"),
             macrospec.MacroSpec("notation", "{{"),
             macrospec.MacroSpec("href", "{{"),
+            macrospec.MacroSpec("llm", "[{"),
             macrospec.MacroSpec("paragraph", "*[{"),
             macrospec.MacroSpec("subparagraph", "*[{"),
             macrospec.MacroSpec("includegraphics", "[{"),
@@ -280,6 +282,7 @@ class _Parser:
         self.source = _expand_preexpansion(source)
         self.filepath = filepath
         self._demo_counter = 0
+        self._in_llm = False
 
     def run(self) -> Tuple[Dict[str, Any], PageDoc]:
         try:
@@ -359,6 +362,18 @@ class _Parser:
         text = "".join(parts).strip()
         if not text:
             self._err(macro_node, f"\\{macro_node.macroname} argument must be plain text")
+        return text
+
+    def _llm_model(self, n, arg) -> str:
+        """Plain-text model id from an llm marker's optional argument."""
+        if any(not isinstance(c, (LatexCharsNode, LatexCommentNode))
+               for c in arg.nodelist):
+            self._err(n, "llm model id must be plain text like claude-fable-5")
+        text = "".join(c.chars for c in arg.nodelist
+                       if isinstance(c, LatexCharsNode)).strip()
+        if not text or not _MODEL_ID_RE.match(text):
+            self._err(n, f"invalid llm model id '{text}' — model id must "
+                         "match [A-Za-z0-9][A-Za-z0-9._:-]*")
         return text
 
     def _url_text(self, group, n) -> str:
@@ -627,6 +642,30 @@ class _Parser:
 
     def _macro(self, n) -> str:
         name = n.macroname
+        if name == "llm":
+            if self._in_llm:
+                self._err(n, "\\llm may not nest inside llm-marked prose")
+            args = n.nodeargd.argnlist if n.nodeargd else []
+            group = args[-1] if args else None
+            if group is None or not hasattr(group, "nodelist"):
+                self._err(n, "\\llm requires a braced argument")
+            model = None
+            if len(args) >= 2 and args[0] is not None:
+                model = self._llm_model(n, args[0])
+            self._in_llm = True
+            try:
+                inner = self._prose(group.nodelist)
+            finally:
+                self._in_llm = False
+            stripped = inner.strip()
+            if not stripped:
+                self._err(n, "\\llm argument is empty")
+            attrs = ' data-ai-disclosure="ai-generated"'
+            if model:
+                attrs += f' data-ai-model="{model}"'
+            lead = inner[: len(inner) - len(inner.lstrip())]
+            trail = inner[len(inner.rstrip()):]
+            return f"{lead}<span{attrs}>{stripped}</span>{trail}"
         if name in _STYLE_MACROS:
             args = n.nodeargd.argnlist if n.nodeargd else []
             group = args[-1] if args else None
