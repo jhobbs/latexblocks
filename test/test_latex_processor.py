@@ -686,6 +686,50 @@ def test_llm_inline_bad_model_id():
     expect_error("\\llm[claude fable]{x}", "model id")
 
 
+def test_llm_env_wraps_paragraphs():
+    html = prose(
+        "\\begin{llm}[claude-fable-5]\nPara one.\n\nPara two.\n\\end{llm}")
+    assert html == (
+        '<div data-ai-disclosure="ai-generated" '
+        'data-ai-model="claude-fable-5">\n'
+        '<p>Para one.</p>\n<p>Para two.</p>\n</div>')
+
+
+def test_llm_env_no_model_arg():
+    html = prose("\\begin{llm}\nBody.\n\\end{llm}")
+    assert html.startswith('<div data-ai-disclosure="ai-generated">')
+    assert 'data-ai-model' not in html
+
+
+def test_llm_env_label_inside_block_still_extracted():
+    _, doc = parse_latex_file(
+        "\\begin{result}[R]\n\\begin{llm}[claude-fable-5]\n\\label{r-one}\n"
+        "Body prose.\n\\end{llm}\n\\end{result}\n")
+    b = doc.top_blocks()[0]
+    assert b.label == "r-one"
+    assert 'data-ai-disclosure="ai-generated"' in b.body_html
+    assert '\\label' not in b.body_html and 'r-one</p>' not in b.body_html
+
+
+def test_llm_env_does_not_nest():
+    expect_error("\\begin{llm}\nouter\n\\begin{llm}\ninner\n\\end{llm}\n"
+                 "\\end{llm}", "nest")
+
+
+def test_llm_env_rejects_sections():
+    expect_error("\\begin{llm}\n\\section{X}\nBody.\n\\end{llm}",
+                 "section")
+
+
+def test_llm_env_rejects_block_envs_inside():
+    expect_error("\\begin{llm}\n\\begin{result}[R]\nr\n\\end{result}\n"
+                 "\\end{llm}", "block")
+
+
+def test_llm_env_empty_is_error():
+    expect_error("\\begin{llm}\n\n\\end{llm}", "empty")
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0

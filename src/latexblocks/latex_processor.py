@@ -264,6 +264,7 @@ def _latex_context():
         ] + [
             macrospec.EnvironmentSpec("lstlisting", args_parser=_LstlistingArgsParser()),
             macrospec.EnvironmentSpec("tabular", "{"),
+            macrospec.EnvironmentSpec("llm", "["),
         ],
     )
     return ctx
@@ -375,6 +376,25 @@ class _Parser:
             self._err(n, f"invalid llm model id '{text}' — model id must "
                          "match [A-Za-z0-9][A-Za-z0-9._:-]*")
         return text
+
+    def _llm_env_html(self, n) -> str:
+        if self._in_llm:
+            self._err(n, "llm environments may not nest inside llm-marked prose")
+        args = n.nodeargd.argnlist if n.nodeargd else []
+        model = None
+        if args and args[0] is not None:
+            model = self._llm_model(n, args[0])
+        self._in_llm = True
+        try:
+            inner = _paragraphize(self._prose(list(n.nodelist)))
+        finally:
+            self._in_llm = False
+        if not inner.strip():
+            self._err(n, "llm environment is empty")
+        attrs = ' data-ai-disclosure="ai-generated"'
+        if model:
+            attrs += f' data-ai-model="{model}"'
+        return f"<div{attrs}>\n{inner}\n</div>"
 
     def _url_text(self, group, n) -> str:
         """URL/path text from a braced group: chars, specials (~), and
@@ -521,14 +541,10 @@ class _Parser:
         flush_prose()
         return items
 
-    def _parse_block_env(self, n) -> MathBlock:
-        title = None
-        args = n.nodeargd.argnlist if n.nodeargd else []
-        if args and args[0] is not None:
-            title = body_text(self._prose(args[0].nodelist))
-        body = list(n.nodelist)
-        extracted: Dict[str, str] = {}
-        notations: List[Tuple[str, str]] = []
+    def _extract_env_metadata(self, body, env_node, extracted, notations):
+        """Pull \\notation/\\label/\\synonyms/\\tags out of a block env's
+        direct children, descending into llm marker environments so the
+        marker is transparent to block metadata."""
         i = 0
         while i < len(body):
             child = body[i]
@@ -536,19 +552,40 @@ class _Parser:
                 notations.append(self._parse_notation(child))
                 del body[i]
                 continue
-            if isinstance(child, LatexMacroNode) and child.macroname in ("label", "synonyms", "tags"):
+            if isinstance(child, LatexMacroNode) and child.macroname in (
+                    "label", "synonyms", "tags"):
                 name = child.macroname
                 if name in extracted:
-                    self._err(child, f"multiple \\{name} commands in one environment")
-                if name == "synonyms" and n.environmentname != "definition":
-                    self._err(child, "\\synonyms is only supported on definition environments")
+                    self._err(child,
+                              f"multiple \\{name} commands in one environment")
+                if (name == "synonyms"
+                        and env_node.environmentname != "definition"):
+                    self._err(child, "\\synonyms is only supported on "
+                                     "definition environments")
                 value = self._chars_arg(child)
                 if name == "label" and not _LABEL_RE.match(value):
                     self._err(child, f"invalid block label '{value}'")
                 extracted[name] = value
                 del body[i]
                 continue
+            if (isinstance(child, LatexEnvironmentNode)
+                    and child.environmentname == "llm"):
+                child.nodelist = self._extract_env_metadata(
+                    list(child.nodelist), env_node, extracted, notations)
+                i += 1
+                continue
             i += 1
+        return body
+
+    def _parse_block_env(self, n) -> MathBlock:
+        title = None
+        args = n.nodeargd.argnlist if n.nodeargd else []
+        if args and args[0] is not None:
+            title = body_text(self._prose(args[0].nodelist))
+        extracted: Dict[str, str] = {}
+        notations: List[Tuple[str, str]] = []
+        body = self._extract_env_metadata(list(n.nodelist), n, extracted,
+                                          notations)
         seen_notation_names = set()
         for notation_name, _ in notations:
             if notation_name in seen_notation_names:
@@ -682,6 +719,9 @@ class _Parser:
             trail = inner[len(inner.rstrip()):]
             return f"{lead}<{tag}>{stripped}</{tag}>{trail}"
         if name in _SECTION_LEVELS:
+            if self._in_llm:
+                self._err(n, "sectioning commands may not appear inside "
+                             "llm-marked prose")
             lvl = _SECTION_LEVELS[name]
             title = self._prose(n.nodeargd.argnlist[-1].nodelist).strip()
             return _island(f'<h{lvl} id="{_heading_id(title)}">{title}</h{lvl}>')
@@ -829,6 +869,8 @@ class _Parser:
             return self._code_html(n)
         if name == "tabular":
             return _island(self._tabular_html(n))
+        if name == "llm":
+            return _island(self._llm_env_html(n))
         if name in _BLOCK_ENV_NAMES:
             self._err(
                 n,
