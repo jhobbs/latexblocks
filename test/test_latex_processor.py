@@ -571,6 +571,35 @@ def test_result_never_attaches_to_theorem():
     assert blocks[0].children == []
 
 
+def test_author_and_date_metadata():
+    """Dated, attributed pages (a posting, a note) carry the two standard
+    LaTeX macros for it rather than a sidecar file."""
+    m = meta("\\title{T}\n\\author{Jason Hobbs}\n\\date{2026-08-28}\n"
+             "\\begin{document}x\\end{document}")
+    assert m["author"] == "Jason Hobbs" and m["date"] == "2026-08-28"
+
+
+def test_author_and_date_are_optional():
+    m = meta("\\title{T}\n\\begin{document}x\\end{document}")
+    assert "author" not in m and "date" not in m
+
+
+def test_author_decodes_char_escapes_like_other_metadata():
+    m = meta("\\title{T}\n\\author{A \\& B}\n\\begin{document}x\\end{document}")
+    assert m["author"] == "A & B"
+
+
+def test_author_and_date_do_not_emit_prose():
+    """Metadata macros are consumed, not rendered: an author line must not
+    also appear in the body the page emits."""
+    doc = parse_latex_file(
+        "\\title{T}\n\\author{Jason Hobbs}\n\\date{2026-08-28}\n"
+        "\\begin{document}\nBody.\n\\end{document}",
+        filepath="content/test/page.tex")[1]
+    body = "\n".join(it for it in doc.items if isinstance(it, str))
+    assert "Jason Hobbs" not in body and "2026-08-28" not in body
+
+
 def test_metadata_title_decodes_char_escapes():
     m = meta("\\title{s5\\_e0}\n\\begin{document}x\\end{document}")
     assert m["title"] == "s5_e0"

@@ -140,7 +140,7 @@ class LatexDialectError(ValueError):
 
 
 _BLOCK_ENV_NAMES = {t.value for t in MathBlockType}
-_METADATA_MACROS = ("title", "description", "slug")
+_METADATA_MACROS = ("title", "description", "slug", "author", "date")
 _IGNORED_MACROS = {"documentclass", "usepackage", "maketitle"}
 _STYLE_MACROS = {"emph": "em", "textit": "em", "textbf": "strong", "texttt": "code"}
 _ISLAND = "\x01"  # wraps block-level HTML islands inside a prose stream
