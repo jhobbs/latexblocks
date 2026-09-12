@@ -109,12 +109,53 @@ def test_finalize_counter_labels():
     assert r1.label == "remark-1" and r2.label == "remark-2"
 
 
-def test_finalize_unlabeled_theorem_auto_labels():
-    t1 = blk("theorem", title="Unlabeled")
-    t2 = blk("theorem", title="Also Unlabeled")
+def test_finalize_titled_theorem_like_auto_labels():
+    # Titled theorem-likes derive their label from the title, like definitions.
+    blocks = [
+        blk("theorem", title="Mean Value Theorem"),
+        blk("lemma", title="Log Sum Inequality"),
+        blk("proposition", title="Stokes' Theorem"),
+        blk("corollary", title="Nonnegativity of Mutual Information"),
+        blk("axiom", title="Axiom of Choice"),
+    ]
+    finalize_blocks(blocks)
+    assert [b.label for b in blocks] == [
+        "mean-value-theorem",
+        "log-sum-inequality",
+        "stokes-theorem",
+        "nonnegativity-of-mutual-information",
+        "axiom-of-choice",
+    ]
+    # title-derived labels are definition-only for synonyms/plurals
+    assert all(not b.auto_generated_synonyms for b in blocks)
+
+
+def test_finalize_untitled_theorem_auto_labels():
+    t1 = blk("theorem")
+    t2 = blk("theorem")
     finalize_blocks([t1, t2])
     assert t1.label == "theorem-1"
     assert t2.label == "theorem-2"
+
+
+def test_finalize_explicit_label_beats_title():
+    t = blk("theorem", title="Mean Value Theorem", label="mvt")
+    finalize_blocks([t])
+    assert t.label == "mvt"
+
+
+def test_finalize_titled_non_theorem_keeps_counter_label():
+    # Only definitions and theorem-likes derive labels from titles.
+    r = blk("remark", title="A Passing Thought")
+    finalize_blocks([r])
+    assert r.label == "remark-1"
+
+
+def test_finalize_proof_of_titled_theorem():
+    t = blk("theorem", title="Mean Value Theorem")
+    p = blk("proof"); p.parent = t; t.children = [p]
+    finalize_blocks([t])
+    assert p.label == "proof-of-mean-value-theorem"
 
 
 def test_render_block_html_shape():

@@ -187,7 +187,7 @@ attachment context; *attachments* fall into the currently-open anchor; a
 
 | Environment | Behavior | Chains by |
 |---|---|---|
-| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` auto-labels from its title and may declare `\synonyms`; `explanation` is free-standing expository prose. |
+| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` or `axiom` auto-labels from its title; a `definition` may declare `\synonyms`; `explanation` is free-standing expository prose. |
 | `theorem`, `lemma`, `proposition`, `exercise` | **anchor** | Open a fresh attachment context that following proofs / notes fall into. |
 | `corollary` | **attach-or-anchor** | Attaches to the open anchor if there is one; otherwise becomes an anchor itself. |
 | `proof` | **attachment** → statement | Attaches inside the current `theorem`/`lemma`/`proposition`/`corollary` (or `exercise`); auto-labels `proof-of-<label>`, appends an automatic QED `\square`. Errors if no statement precedes it. |
@@ -198,7 +198,8 @@ attachment context; *attachments* fall into the currently-open anchor; a
 the next attachable block starts its own card instead of joining the previous
 one — as the `remark` above does.
 
-Auto-labels: a titled definition normalizes its title (`Abelian Group` →
+Auto-labels: a titled `definition`, `theorem`, `lemma`, `proposition`,
+`corollary`, or `axiom` normalizes its title (`Abelian Group` →
 `abelian-group`); an attached block derives from its parent (`proof-of-…`,
 `<parent>-<type>`); anything else falls back to `<type>-<counter>`.
 

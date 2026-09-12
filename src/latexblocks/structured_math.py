@@ -348,6 +348,12 @@ _NESTED_AUTO_TYPES = {
     MathBlockType.INTUITION, MathBlockType.EXERCISE, MathBlockType.SOLUTION,
 }
 
+# Types whose title, when no label is given, supplies the label.
+_TITLE_LABELED_TYPES = {
+    MathBlockType.DEFINITION, MathBlockType.THEOREM, MathBlockType.LEMMA,
+    MathBlockType.PROPOSITION, MathBlockType.COROLLARY, MathBlockType.AXIOM,
+}
+
 
 def finalize_blocks(top_blocks: List[MathBlock]) -> None:
     """Assign auto labels, definition synonyms/plurals, and tags, in place."""
@@ -357,7 +363,7 @@ def finalize_blocks(top_blocks: List[MathBlock]) -> None:
     def visit(block: MathBlock):
         nonlocal counter
         counter += 1
-        if not block.label and block.block_type == MathBlockType.DEFINITION and block.title:
+        if not block.label and block.block_type in _TITLE_LABELED_TYPES and block.title:
             block.label = MathBlock.normalize_label_from_title(block.title)
         if not block.label:
             parent = block.parent
@@ -373,8 +379,8 @@ def finalize_blocks(top_blocks: List[MathBlock]) -> None:
                 block.label = f"{parent.label}-{block.block_type.value}" + (f"-{n}" if n > 1 else "")
             else:
                 block.label = f"{block.block_type.value}-{counter}"
-        # Unlabeled top-level theorem-likes auto-number via the counter
-        # fallback above rather than erroring, to preserve legacy anchor IDs.
+        # Untitled, unlabeled top-level theorem-likes auto-number via the
+        # counter fallback above rather than erroring.
         if block.block_type == MathBlockType.DEFINITION:
             _build_definition_synonyms(block)
         if "tags" in block.metadata and not block.tags:
