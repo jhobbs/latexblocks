@@ -124,7 +124,7 @@ def test_term_references_end_to_end():
     _in_tmp(run)
 
 
-def test_term_label_collision_is_error():
+def test_cross_file_term_label_collision_is_error():
     def run():
         with pytest.raises(LatexDialectError, match="estimate"):
             _build({"content/stats.tex": DEFINING,
@@ -145,3 +145,42 @@ def test_synonym_references_count_toward_block_panel():
         refs = index.reverse_index.get_references_for_label("expected-value").direct_references
         assert [r.source_label for r in refs] == ["t"]
     _in_tmp(run)
+
+
+def test_term_naming_own_title_marks_primary_term():
+    (d,) = parse("\\begin{definition}[Bias]\\synonyms{skew}\nthe \\term{bias} and \\term{skew}, "
+                 "and \\term{unbiased} ones\n\\end{definition}")
+    assert [t.label for t in d.terms] == ["unbiased"]
+    assert '<strong class="defined-term">bias</strong>' in d.body_html
+    assert '<strong class="defined-term">skew</strong>' in d.body_html
+    assert '<strong class="defined-term" id="unbiased">' in d.body_html
+
+
+def test_same_file_collision_reports_term_line():
+    src = ("\\begin{definition}[Estimator]\nan \\term{estimate}\n\\end{definition}\n\n"
+           "\\begin{definition}[Estimate]\nx\n\\end{definition}\n")
+    with pytest.raises(LatexDialectError,
+                       match=r"t\.tex:2: \\term label 'estimate' \(estimate\) collides "
+                             r"with definition 'Estimate' in this file"):
+        parse(src)
+    with pytest.raises(LatexDialectError, match=r"t\.tex:3: .*'point-estimate'.*\\term 'estimate'"):
+        parse("\\begin{definition}[A]\n\\term{estimate}\n\\term[estimate, point estimate]{guess}"
+              " \\term{point estimate}\n\\end{definition}")
+
+
+def test_term_naming_own_title_marks_primary_term():
+    (d,) = parse("\\begin{definition}[Bias]\\synonyms{skew}\nthe \\term{bias} and \\term{skew}, "
+                 "and \\term{unbiased} ones\n\\end{definition}")
+    assert [t.label for t in d.terms] == ["unbiased"]
+    assert '<strong class="defined-term">bias</strong>' in d.body_html
+    assert '<strong class="defined-term">skew</strong>' in d.body_html
+    assert '<strong class="defined-term" id="unbiased">' in d.body_html
+
+
+def test_same_file_collision_reports_term_line():
+    src = ("\\begin{definition}[Estimator]\nan \\term{estimate}\n\\end{definition}\n\n"
+           "\\begin{definition}[Estimate]\nx\n\\end{definition}\n")
+    with pytest.raises(LatexDialectError,
+                       match=r"t\.tex:2: \\term label 'estimate' \(estimate\) collides "
+                             r"with definition 'Estimate' in this file"):
+        parse(src)

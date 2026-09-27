@@ -28,6 +28,7 @@ from .structured_math import (
     PageDoc,
     body_text,
     finalize_blocks,
+    check_term_collisions,
     CHILD_MARKER_RE,
     math_to_dollar_text,
 )
@@ -313,6 +314,10 @@ class _Parser:
             finalize_blocks(top_blocks)
         except ValueError as e:
             raise LatexDialectError(f"{self.filepath}: {e}") from e
+        problems = check_term_collisions(top_blocks)
+        if problems:
+            line, message = problems[0]
+            raise LatexDialectError(f"{self.filepath}:{line}: {message}")
         return metadata, PageDoc(items=items)
 
     # --- helpers ---
@@ -851,7 +856,9 @@ class _Parser:
                     synonyms.append((syn, MathBlock.normalize_label_from_title(syn)))
         if any(t.label == label for t in self._term_sink):
             self._err(n, f"\\term{{{title}}} appears more than once in this definition")
-        self._term_sink.append(DefinedTerm(title=title, label=label, synonyms=synonyms))
+        self._term_sink.append(DefinedTerm(
+            title=title, label=label, synonyms=synonyms,
+            line=self.source[: n.pos].count("\n") + 1))
         lead = inner[: len(inner) - len(inner.lstrip())]
         trail = inner[len(inner.rstrip()):]
         return (f'{lead}<strong class="defined-term" id="{label}">'

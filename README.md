@@ -218,7 +218,7 @@ against `latex_processor.py`):
 | `\dembed{label}` | Transclude the target block's full rendered card inline. Page level only — inside a block body it can fail with an order-dependent build error if the target hasn't rendered yet. |
 | `\notation{\macro}{expansion}` | At the top of a block: declare a site-wide math macro whose every use links back to this block. |
 | `\synonyms{a, b}` | At the top of a **definition**: register alternate titles (also auto-plurals/singulars) as reference aliases. |
-| `\term{text}` / `\term[syn, syn]{text}` | Inside a **definition** body: a further term the block defines (the title is the primary one). Renders bold, gets its own label (`\term{estimate}` → `estimate`), optional synonyms, and auto plurals/singulars; references land on the term itself (`#estimate`) and count toward the block's "Referenced by" panel. A collision with any other label is a build error. |
+| `\term{text}` / `\term[syn, syn]{text}` | Inside a **definition** body: a further term the block defines (the title is the primary one). Renders bold, gets its own label (`\term{estimate}` → `estimate`), optional synonyms, and auto plurals/singulars; references land on the term itself (`#estimate`) and count toward the block's "Referenced by" panel. A `\term` naming the block's own title or synonym just marks the primary term. A collision with any other label is an error (same-file ones at parse time, with the term's line). |
 | `\tags{a, b}` | At the top of a block: attach classification chips. |
 | `\label{label}` | At the top of a block: set its explicit label (else auto-generated). |
 | `\title{...}`, `\description{...}`, `\slug{...}` | Page metadata (all optional; `\slug` overrides the URL derived from the path). |

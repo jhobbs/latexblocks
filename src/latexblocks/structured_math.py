@@ -196,6 +196,7 @@ class DefinedTerm:
     label: str
     synonyms: List[Tuple[str, str]] = field(default_factory=list)  # (synonym_title, synonym_label)
     auto_generated_synonyms: List[Tuple[str, str]] = field(default_factory=list)
+    line: int = 0  # source line of the \\term, for collision errors
 
 
 @dataclass
@@ -412,6 +413,17 @@ def finalize_blocks(top_blocks: List[MathBlock]) -> None:
 
 
 def _build_definition_synonyms(block: MathBlock) -> None:
+    _parse_manual_synonyms(block)
+    # A \term naming the block's own title or one of its synonyms just marks
+    # the primary term in the body: bold, but no separate entry and no id
+    # (the card itself already carries that label)
+    primary = {block.label} | {lbl for _, lbl in block.synonyms}
+    for term in [t for t in block.terms if t.label in primary]:
+        block.terms.remove(term)
+        block.body_html = block.body_html.replace(
+            f'<strong class="defined-term" id="{term.label}">',
+            '<strong class="defined-term">', 1)
+
     seen_labels = {block.label}
     for term in block.terms:
         seen_labels.add(term.label)
@@ -428,16 +440,7 @@ def _build_definition_synonyms(block: MathBlock) -> None:
             seen_labels.add(label)
             block.auto_generated_synonyms.append((name, label))
 
-    names = []
-    if "synonyms" in block.metadata and not block.synonyms:
-        for syn in block.metadata["synonyms"].split(","):
-            syn = syn.strip().strip('"')
-            if not syn:
-                continue
-            syn_label = MathBlock.normalize_label_from_title(syn)
-            block.synonyms.append((syn, syn_label))
-            seen_labels.add(syn_label)
-            names.append(syn)
+    names = [syn for syn, _ in block.synonyms]
     if block.title:
         names.append(block.title)
     for name in names:
@@ -453,6 +456,38 @@ def _build_definition_synonyms(block: MathBlock) -> None:
                 if label not in seen_labels:
                     seen_labels.add(label)
                     term.auto_generated_synonyms.append((auto, label))
+
+
+def _parse_manual_synonyms(block: MathBlock) -> None:
+    if "synonyms" in block.metadata and not block.synonyms:
+        for syn in block.metadata["synonyms"].split(","):
+            syn = syn.strip().strip('"')
+            if syn:
+                block.synonyms.append((syn, MathBlock.normalize_label_from_title(syn)))
+
+
+def check_term_collisions(top_blocks: List[MathBlock]) -> List[Tuple[int, str]]:
+    """Same-file \\term label collisions as (line, message), so a
+    single-file parse reports them with a line number instead of leaving
+    them to the whole-site index build. Cross-file collisions are still
+    caught only there."""
+    owners: Dict[str, str] = {}
+    blocks = [b for t in top_blocks for b in t.walk()]
+    for b in blocks:
+        name = f"{b.block_type.value} '{b.title or b.label}'"
+        owners.setdefault(b.label, name)
+        for _, lbl in b.synonyms:
+            owners.setdefault(lbl, f"a synonym of {name}")
+    problems = []
+    for b in blocks:
+        for term in b.terms:
+            for title, lbl in [(term.title, term.label)] + term.synonyms:
+                if lbl in owners:
+                    problems.append((term.line, f"\\term label '{lbl}' ({title}) "
+                                     f"collides with {owners[lbl]} in this file"))
+                else:
+                    owners[lbl] = f"\\term '{term.title}'"
+    return problems
 
 
 def render_block_html(block: MathBlock, content_html: str, url: str) -> str:
