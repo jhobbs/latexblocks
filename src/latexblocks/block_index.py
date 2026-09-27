@@ -8,6 +8,7 @@ files, enabling cross-file references using the @label syntax.
 import html
 import logging
 import os
+import re
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 from .config import get_config
@@ -17,8 +18,11 @@ from .structured_math import (
 from .ref_resolver import RefResolver
 from .reverse_index import ReverseIndex
 from .content_loader import load_content_file
+from .latex_processor import LatexDialectError
 
 logger = logging.getLogger(__name__)
+
+_TERM_ID_RE = re.compile(r'(<strong class="defined-term") id="[^"]*"')
 
 
 def _ref_link_text(ref) -> str:
@@ -37,12 +41,14 @@ class BlockReference:
     file_path: str
     canonical_url: str
     page_title: Optional[str] = None
+    # Fragment override: a \\term reference lands on the term, not the card
+    anchor: Optional[str] = None
 
     @property
     def full_url(self) -> str:
         """Get the full URL including the fragment for this block."""
         # All blocks now have labels (either explicit or implicit)
-        return f"{self.canonical_url}#{self.block.label}"
+        return f"{self.canonical_url}#{self.anchor or self.block.label}"
 
 
 class BlockIndex:
@@ -53,6 +59,7 @@ class BlockIndex:
         self.index: Dict[str, BlockReference] = {}  # Label-based index for cross-references
         self.all_blocks: List[BlockReference] = []  # All blocks, including unlabeled ones
         self.notation_map: Dict[str, BlockReference] = {}  # Notation macro name -> declaring block
+        self._term_owners: Dict[str, str] = {}  # \\term / \\term-synonym label -> declaring file
         self._is_built = False
         # Initialize reverse index for tracking references
         self.reverse_index = ReverseIndex()
@@ -84,6 +91,7 @@ class BlockIndex:
         self.index.clear()
         self.all_blocks.clear()
         self.notation_map.clear()
+        self._term_owners.clear()
         self.reverse_index = ReverseIndex()
 
         # Phase 1: Scan and index all blocks
@@ -239,6 +247,10 @@ class BlockIndex:
             # Normalize label for storage (case-insensitive lookup)
             normalized_label = MathBlock.normalize_label_from_title(block.label)
 
+            if normalized_label in self._term_owners:
+                raise LatexDialectError(
+                    f"{file_path}: block label '{block.label}' collides with a "
+                    f"\\term defined in {self._term_owners[normalized_label]}")
             if normalized_label in self.index:
                 existing = self.index[normalized_label]
                 logger.warning(
@@ -288,6 +300,45 @@ class BlockIndex:
                             url=f"{prefix}/{canonical_url}#{block.label}"
                         )
 
+            for term in block.terms:
+                self._register_term(block, term, file_path,
+                                    f"{prefix}/{canonical_url}", page_title)
+
+    def _register_term(self, block, term, file_path, canonical_url, page_title):
+        """Index a \\term's label, its synonyms, and its auto plurals/singulars
+        as references landing on the term inside `block`. The term and its
+        explicit synonyms are distinct concepts other content names directly,
+        so any collision is a hard error; auto-generated forms step aside."""
+        def make_ref(alias_title, is_synonym):
+            ref = BlockReference(block=block, file_path=file_path,
+                                 canonical_url=canonical_url,
+                                 page_title=page_title, anchor=term.label)
+            ref.synonym_title = alias_title
+            ref.is_synonym = is_synonym
+            ref.term_title = term.title
+            return ref
+
+        explicit = [(term.title, term.label, False)] + [
+            (syn, lbl, True) for syn, lbl in term.synonyms]
+        for alias_title, alias_label, is_synonym in explicit:
+            key = MathBlock.normalize_label_from_title(alias_label)
+            if key in self.index or key in self._term_owners:
+                other = (self._term_owners.get(key)
+                         or self.index[key].file_path)
+                raise LatexDialectError(
+                    f"{file_path}: \\term label '{key}' (in definition "
+                    f"'{block.title or block.label}') collides with an existing "
+                    f"label in {other}")
+            self._term_owners[key] = file_path
+            self.index[key] = make_ref(alias_title, is_synonym)
+            self.reverse_index.add_block_definition(
+                label=key, file_path=file_path, title=alias_title,
+                url=f"{canonical_url}#{term.label}")
+        for alias_title, alias_label in term.auto_generated_synonyms:
+            key = MathBlock.normalize_label_from_title(alias_label)
+            if key not in self.index:
+                self.index[key] = make_ref(alias_title, True)
+
     def _collect_all_references(self):
         """Phase 2: Collect all references to build the reverse index."""
         prefix = get_config().url_prefix
@@ -309,12 +360,12 @@ class BlockIndex:
             # cross-build "Referenced by" nondeterminism (see reverse_index's
             # compute_transitive_references), but sorting keeps every
             # traversal that touches these sets equally reproducible.
-            for label in sorted(page_resolver.referenced_labels):
+            for label in sorted(self._canonical_labels(page_resolver.referenced_labels)):
                 self.reverse_index.add_reference(
                     referenced_label=label, source_file=file_path, source_label=None,
                     source_title=page_title, source_url=base_url, context="",
                     is_embed=False, is_from_block=False)
-            for label in sorted(page_resolver.embedded_labels):
+            for label in sorted(self._canonical_labels(page_resolver.embedded_labels)):
                 self.reverse_index.add_reference(
                     referenced_label=label, source_file=file_path, source_label=None,
                     source_title=page_title, source_url=base_url, context="",
@@ -327,16 +378,26 @@ class BlockIndex:
                                     current_block_label=block.label)
                     r.collect(block.body_html)
                     full_url = f"{base_url}#{block.label}"
-                    for label in sorted(r.referenced_labels):
+                    for label in sorted(self._canonical_labels(r.referenced_labels) - {block.label}):
                         self.reverse_index.add_reference(
                             referenced_label=label, source_file=file_path,
                             source_label=block.label, source_title=block.title or block.label,
                             source_url=full_url, context="", is_embed=False)
-                    for label in sorted(r.embedded_labels):
+                    for label in sorted(self._canonical_labels(r.embedded_labels)):
                         self.reverse_index.add_reference(
                             referenced_label=label, source_file=file_path,
                             source_label=block.label, source_title=block.title or block.label,
                             source_url=full_url, context="", is_embed=True)
+
+    def _canonical_labels(self, labels):
+        """Map reference labels to the label of the block they resolve to, so
+        references via a synonym, plural, or \\term count toward that block's
+        "Referenced by" panel. Unresolved labels pass through unchanged."""
+        out = set()
+        for label in labels:
+            bref = self.get_reference(label)
+            out.add(bref.block.label if bref else label)
+        return out
 
     def _render_all_blocks(self):
         """Phase 4: Render all blocks now that the index and references are complete."""
@@ -365,7 +426,9 @@ class BlockIndex:
         content_html = resolver.resolve(block.body_html)
 
         # Tooltip content: this block's own content only, children removed
-        block.content_html = CHILD_MARKER_RE.sub("", content_html).strip()
+        # (\term ids dropped: the tooltip copy must not duplicate the anchor)
+        block.content_html = _TERM_ID_RE.sub(
+            r"\1", CHILD_MARKER_RE.sub("", content_html)).strip()
 
         rendered_html = render_block_html(block, content_html, full_url)
 

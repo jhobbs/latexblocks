@@ -187,7 +187,7 @@ attachment context; *attachments* fall into the currently-open anchor; a
 
 | Environment | Behavior | Chains by |
 |---|---|---|
-| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` or `axiom` auto-labels from its title; a `definition` may declare `\synonyms`; `explanation` is free-standing expository prose. |
+| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` or `axiom` auto-labels from its title; a `definition` may declare `\synonyms` and mark further terms it defines with `\term`; `explanation` is free-standing expository prose. |
 | `theorem`, `lemma`, `proposition`, `exercise` | **anchor** | Open a fresh attachment context that following proofs / notes fall into. |
 | `corollary` | **attach-or-anchor** | Attaches to the open anchor if there is one; otherwise becomes an anchor itself. |
 | `proof` | **attachment** → statement | Attaches inside the current `theorem`/`lemma`/`proposition`/`corollary` (or `exercise`); auto-labels `proof-of-<label>`, appends an automatic QED `\square`. Errors if no statement precedes it. |
@@ -218,6 +218,7 @@ against `latex_processor.py`):
 | `\dembed{label}` | Transclude the target block's full rendered card inline. Page level only — inside a block body it can fail with an order-dependent build error if the target hasn't rendered yet. |
 | `\notation{\macro}{expansion}` | At the top of a block: declare a site-wide math macro whose every use links back to this block. |
 | `\synonyms{a, b}` | At the top of a **definition**: register alternate titles (also auto-plurals/singulars) as reference aliases. |
+| `\term{text}` / `\term[syn, syn]{text}` | Inside a **definition** body: a further term the block defines (the title is the primary one). Renders bold, gets its own label (`\term{estimate}` → `estimate`), optional synonyms, and auto plurals/singulars; references land on the term itself (`#estimate`) and count toward the block's "Referenced by" panel. A collision with any other label is a build error. |
 | `\tags{a, b}` | At the top of a block: attach classification chips. |
 | `\label{label}` | At the top of a block: set its explicit label (else auto-generated). |
 | `\title{...}`, `\description{...}`, `\slug{...}` | Page metadata (all optional; `\slug` overrides the URL derived from the path). |
@@ -345,7 +346,8 @@ At runtime the bundle wires up two features:
   Tooltip content comes from a JSON island the page must emit:
   `<script type="application/json" id="tooltip-data">[...]</script>`, an
   **array** of objects each carrying `label`, `type`, `title`, `content`,
-  and optionally `url`, `is_synonym`, `synonym_of`, `synonym_title`.
+  and optionally `url`, `is_synonym`, `synonym_of`, `synonym_title`, and
+  `defined_in` (present only on `\term` entries: the defining block's title).
 
   `render_page()["tooltip_data"]` is a **dict** keyed by label, and its
   entry values do NOT contain a `label` key — so the page must fold the key

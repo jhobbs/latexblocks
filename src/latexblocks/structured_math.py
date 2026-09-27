@@ -183,6 +183,22 @@ class MathBlockType(Enum):
 
 
 @dataclass
+class DefinedTerm:
+    """A further term defined inside a definition block via \\term{...}.
+
+    The block's title is its primary term; each DefinedTerm is another
+    concept the same block defines, with its own label (also the id of the
+    term's <strong> in the body, so references land on the word itself),
+    its own synonyms, and its own auto-generated plural/singular aliases.
+    """
+
+    title: str
+    label: str
+    synonyms: List[Tuple[str, str]] = field(default_factory=list)  # (synonym_title, synonym_label)
+    auto_generated_synonyms: List[Tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass
 class MathBlock:
     """Represents a structured mathematical content block."""
 
@@ -200,6 +216,7 @@ class MathBlock:
     auto_generated_synonyms: List[Tuple[str, str]] = field(default_factory=list)  # Auto-generated synonyms (not shown in UI)
     tags: List[str] = field(default_factory=list)  # List of tags for categorization
     notations: List[Tuple[str, str]] = field(default_factory=list)  # (macro name, TeX expansion)
+    terms: List["DefinedTerm"] = field(default_factory=list)  # extra \\term{...}s a definition defines
 
     def walk(self) -> Iterator["MathBlock"]:
         yield self
@@ -396,6 +413,10 @@ def finalize_blocks(top_blocks: List[MathBlock]) -> None:
 
 def _build_definition_synonyms(block: MathBlock) -> None:
     seen_labels = {block.label}
+    for term in block.terms:
+        seen_labels.add(term.label)
+        seen_labels.update(lbl for _, lbl in term.synonyms)
+        seen_labels.update(lbl for _, lbl in term.auto_generated_synonyms)
     seen_labels.update(lbl for _, lbl in block.synonyms)
     seen_labels.update(lbl for _, lbl in block.auto_generated_synonyms)
 
@@ -422,6 +443,16 @@ def _build_definition_synonyms(block: MathBlock) -> None:
     for name in names:
         add_auto(MathBlock.generate_plural(name))
         add_auto(MathBlock.generate_singular(name))
+
+    for term in block.terms:
+        for name in [term.title] + [syn for syn, _ in term.synonyms]:
+            for auto in (MathBlock.generate_plural(name), MathBlock.generate_singular(name)):
+                if not auto:
+                    continue
+                label = MathBlock.normalize_label_from_title(auto)
+                if label not in seen_labels:
+                    seen_labels.add(label)
+                    term.auto_generated_synonyms.append((auto, label))
 
 
 def render_block_html(block: MathBlock, content_html: str, url: str) -> str:
@@ -450,6 +481,9 @@ def render_block_html(block: MathBlock, content_html: str, url: str) -> str:
     if block.synonyms:
         names = ", ".join(html_lib.escape(s[0]) for s in block.synonyms)
         parts.append(f'<span class="block-synonyms">(also: {names})</span>')
+    if block.terms:
+        names = ", ".join(text_with_math_to_html(t.title) for t in block.terms)
+        parts.append(f'<span class="block-terms">(also defines: {names})</span>')
     if block.notations:
         from .latex_processor import render_math  # local: latex_processor imports this module
 

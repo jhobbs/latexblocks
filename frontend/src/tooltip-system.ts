@@ -7,6 +7,7 @@ interface TooltipData {
   is_synonym?: boolean;
   synonym_of?: string;
   synonym_title?: string;
+  defined_in?: string;
 }
 
 interface TooltipCache {
@@ -265,11 +266,14 @@ class TooltipSystem {
         <div class="math-tooltip-header">
           <span class="math-tooltip-type">${typeDisplay}: `;
     
-    // Handle synonym display
-    if (data.is_synonym && data.synonym_title) {
+    // Handle synonym and \term display
+    if ((data.is_synonym || data.defined_in) && data.synonym_title) {
       content += `${data.synonym_title}`;
       if (data.synonym_of) {
         content += `; synonym of ${data.synonym_of}`;
+      }
+      if (data.defined_in) {
+        content += `; defined in ${data.defined_in}`;
       }
     } else if (data.title) {
       content += `${data.title}`;

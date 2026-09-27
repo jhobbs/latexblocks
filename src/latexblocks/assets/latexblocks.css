@@ -504,8 +504,9 @@ a.block-reference:has(math):hover {
   text-decoration: underline;
 }
 
-/* Synonyms display in definition headers */
-.block-synonyms {
+/* Synonyms and further \term-defined terms in definition headers */
+.block-synonyms,
+.block-terms {
   margin-left: var(--space-sm);
   font-weight: normal;
   font-style: italic;
@@ -539,6 +540,19 @@ a.block-reference:has(math):hover {
   color: var(--color-text-secondary);
   border-radius: 12px;
   border: 1px solid var(--color-border);
+}
+
+/* A \term inside a definition body: bold like \textbf; highlighted when
+   a reference to the term lands on it */
+.defined-term {
+  scroll-margin-top: 4rem;
+  border-radius: 3px;
+  transition: background-color 0.3s ease;
+}
+
+.defined-term:target {
+  background-color: var(--color-bg-secondary);
+  box-shadow: 0 0 0 2px var(--color-primary);
 }
 
 /* Synonym reference styling */

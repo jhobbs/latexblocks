@@ -24,6 +24,7 @@ from pylatexenc.latexwalker import (
 from .structured_math import (
     MathBlockType,
     MathBlock,
+    DefinedTerm,
     PageDoc,
     body_text,
     finalize_blocks,
@@ -251,6 +252,7 @@ def _latex_context():
             macrospec.MacroSpec("detach", ""),
             macrospec.MacroSpec("source", "{"),
             macrospec.MacroSpec("synonyms", "{"),
+            macrospec.MacroSpec("term", "[{"),
             macrospec.MacroSpec("tags", "{"),
             macrospec.MacroSpec("notation", "{{"),
             macrospec.MacroSpec("href", "{{"),
@@ -284,6 +286,9 @@ class _Parser:
         self.filepath = filepath
         self._demo_counter = 0
         self._in_llm = False
+        # DefinedTerms collected by \term while parsing a definition's body;
+        # None outside a definition (where \term is an error)
+        self._term_sink: Optional[List[DefinedTerm]] = None
 
     def run(self) -> Tuple[Dict[str, Any], PageDoc]:
         try:
@@ -578,6 +583,14 @@ class _Parser:
         return body
 
     def _parse_block_env(self, n) -> MathBlock:
+        outer_sink = self._term_sink
+        self._term_sink = None  # \term may not appear in a block title
+        try:
+            return self._parse_block_env_inner(n)
+        finally:
+            self._term_sink = outer_sink
+
+    def _parse_block_env_inner(self, n) -> MathBlock:
         title = None
         args = n.nodeargd.argnlist if n.nodeargd else []
         if args and args[0] is not None:
@@ -586,6 +599,8 @@ class _Parser:
         notations: List[Tuple[str, str]] = []
         body = self._extract_env_metadata(list(n.nodelist), n, extracted,
                                           notations)
+        terms: List[DefinedTerm] = []
+        self._term_sink = terms if n.environmentname == "definition" else None
         seen_notation_names = set()
         for notation_name, _ in notations:
             if notation_name in seen_notation_names:
@@ -622,6 +637,7 @@ class _Parser:
         blk.body_html = body_html
         blk.children = children
         blk.notations = notations
+        blk.terms = terms
         for c in children:
             c.parent = blk
         return blk
@@ -718,6 +734,8 @@ class _Parser:
             lead = inner[: len(inner) - len(inner.lstrip())]
             trail = inner[len(inner.rstrip()):]
             return f"{lead}<{tag}>{stripped}</{tag}>{trail}"
+        if name == "term":
+            return self._term(n)
         if name in _SECTION_LEVELS:
             if self._in_llm:
                 self._err(n, "sectioning commands may not appear inside "
@@ -799,6 +817,45 @@ class _Parser:
         if name == "source":
             self._err(n, "\\source is only supported at page level, outside block environments")
         self._err(n, f"unsupported command \\{name} — extend the dialect in latex_processor.py if needed")
+
+    def _term(self, n) -> str:
+        """\\term[syn, syn]{text}: a further term the enclosing definition
+        defines. Renders like \\textbf, with the term's label as the id so
+        references to it land on the word itself."""
+        if self._term_sink is None:
+            self._err(n, "\\term is only supported inside the body of a "
+                         "definition environment")
+        opt, mand = n.nodeargd.argnlist
+        inner = self._prose(mand.nodelist)
+        stripped = inner.strip()
+        if not stripped:
+            self._err(n, "\\term argument is empty")
+        if "<a " in stripped or _ISLAND in stripped:
+            self._err(n, "\\term text may not contain links or block-level content")
+        title = body_text(stripped)
+        label = MathBlock.normalize_label_from_title(title)
+        if not label:
+            self._err(n, f"\\term{{{title}}} yields an empty label")
+        synonyms: List[Tuple[str, str]] = []
+        if opt is not None:
+            if any(not isinstance(c, (LatexCharsNode, LatexCommentNode, LatexSpecialsNode))
+                   for c in opt.nodelist):
+                self._err(n, "\\term synonyms must be plain text like "
+                             "[point estimate, estimated value]")
+            raw = "".join(c.chars if isinstance(c, LatexCharsNode) else
+                          c.specials_chars if isinstance(c, LatexSpecialsNode) else ""
+                          for c in opt.nodelist)
+            for syn in raw.split(","):
+                syn = syn.strip().strip('"')
+                if syn:
+                    synonyms.append((syn, MathBlock.normalize_label_from_title(syn)))
+        if any(t.label == label for t in self._term_sink):
+            self._err(n, f"\\term{{{title}}} appears more than once in this definition")
+        self._term_sink.append(DefinedTerm(title=title, label=label, synonyms=synonyms))
+        lead = inner[: len(inner) - len(inner.lstrip())]
+        trail = inner[len(inner.rstrip()):]
+        return (f'{lead}<strong class="defined-term" id="{label}">'
+                f'{stripped}</strong>{trail}')
 
     def _fix_image_path(self, path: str) -> str:
         if re.match(r"^(https?:|data:|/)", path):

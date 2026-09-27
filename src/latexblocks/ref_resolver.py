@@ -35,18 +35,29 @@ def tooltip_entry(bref) -> Dict[str, Any]:
     block = bref.block
     is_synonym = getattr(bref, "is_synonym", False)
     synonym_title = getattr(bref, "synonym_title", None)
+    term_title = getattr(bref, "term_title", None)
     title = text_with_math_to_html(block.title) if block.title else ""
+    if term_title:
+        # \term reference: the term (or its alias) heads the tooltip, which
+        # names the definition it is defined in
+        synonym_of = (text_with_math_to_html(term_title)
+                      if is_synonym and synonym_title != term_title else None)
+    else:
+        synonym_of = title if is_synonym and title else None
     url = bref.full_url or ""
-    return {
+    entry = {
         "type": block.block_type.value,
         "title": title,
         "content": block.content_html,
         "url": url if not url.startswith("#") else "",
         "is_synonym": is_synonym,
-        "synonym_of": title if is_synonym and title else None,
+        "synonym_of": synonym_of,
         "synonym_title": (text_with_math_to_html(synonym_title)
                           if synonym_title else None),
     }
+    if term_title:
+        entry["defined_in"] = title
+    return entry
 
 
 def _split_ref(ref: str) -> Tuple[Optional[str], str]:
@@ -138,7 +149,7 @@ class RefResolver:
             css = "block-reference synonym-reference" if is_synonym else "block-reference"
             if custom_text.strip():
                 text = custom_text
-            elif is_synonym and getattr(bref, "synonym_title", None):
+            elif getattr(bref, "synonym_title", None):
                 text = bref.synonym_title
                 if block.block_type == MathBlockType.DEFINITION:
                     text = (apply_reference_case(label, text)
