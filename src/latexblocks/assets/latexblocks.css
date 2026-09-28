@@ -555,6 +555,12 @@ a.block-reference:has(math):hover {
   box-shadow: 0 0 0 2px var(--color-primary);
 }
 
+/* A \term's synonyms, listed inline after the term */
+.term-synonyms {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
 /* Synonym reference styling */
 .synonym-reference {
   position: relative;

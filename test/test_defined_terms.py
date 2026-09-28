@@ -163,24 +163,49 @@ def test_same_file_collision_reports_term_line():
                        match=r"t\.tex:2: \\term label 'estimate' \(estimate\) collides "
                              r"with definition 'Estimate' in this file"):
         parse(src)
-    with pytest.raises(LatexDialectError, match=r"t\.tex:3: .*'point-estimate'.*\\term 'estimate'"):
+    with pytest.raises(LatexDialectError, match=r"t\.tex:3: \\term label 'estimate' \(estimate\) collides with \\term 'estimate'"):
         parse("\\begin{definition}[A]\n\\term{estimate}\n\\term[estimate, point estimate]{guess}"
               " \\term{point estimate}\n\\end{definition}")
 
 
-def test_term_naming_own_title_marks_primary_term():
-    (d,) = parse("\\begin{definition}[Bias]\\synonyms{skew}\nthe \\term{bias} and \\term{skew}, "
-                 "and \\term{unbiased} ones\n\\end{definition}")
-    assert [t.label for t in d.terms] == ["unbiased"]
-    assert '<strong class="defined-term">bias</strong>' in d.body_html
-    assert '<strong class="defined-term">skew</strong>' in d.body_html
-    assert '<strong class="defined-term" id="unbiased">' in d.body_html
+def test_own_title_term_synonyms_join_the_block():
+    (d,) = parse("\\begin{definition}[Union]\\synonyms{join}\nthe "
+                 "\\term[set union, join]{union} of sets\n\\end{definition}")
+    assert d.terms == []
+    assert d.synonyms == [("join", "join"), ("set union", "set-union")]
+    assert ("set unions", "set-unions") in d.auto_generated_synonyms
+    assert '<strong class="defined-term">union</strong>' in d.body_html
 
 
-def test_same_file_collision_reports_term_line():
-    src = ("\\begin{definition}[Estimator]\nan \\term{estimate}\n\\end{definition}\n\n"
-           "\\begin{definition}[Estimate]\nx\n\\end{definition}\n")
-    with pytest.raises(LatexDialectError,
-                       match=r"t\.tex:2: \\term label 'estimate' \(estimate\) collides "
-                             r"with definition 'Estimate' in this file"):
-        parse(src)
+def test_own_title_term_synonyms_without_synonyms_macro():
+    (d,) = parse("\\begin{definition}[Union]\nthe \\term[set union]{union}\n\\end{definition}")
+    assert d.synonyms == [("set union", "set-union")]
+
+
+def test_own_title_term_synonyms_resolve_across_files():
+    def run():
+        index, _ = _build({
+            "content/a.tex": "\\begin{definition}[Union]\nthe \\term[set union]{union}\n\\end{definition}\n",
+            "content/b.tex": "\\begin{theorem}[T] a \\@{set-union} \\end{theorem}\n"})
+        refs = index.reverse_index.get_references_for_label("union").direct_references
+        assert [r.source_label for r in refs] == ["t"]
+    _in_tmp(run)
+
+
+def test_term_synonyms_render_inline_after_the_term():
+    (d,) = parse("\\begin{definition}[A]\nthe \\term[set difference, relative complement]{difference}"
+                 " of sets\n\\end{definition}")
+    assert ('<strong class="defined-term" id="difference">difference</strong> '
+            '<span class="term-synonyms">(also: set difference, relative complement)</span>'
+            ' of sets') in d.body_html
+
+
+def test_term_without_synonyms_has_no_inline_list():
+    (d,) = parse("\\begin{definition}[A]\nthe \\term{difference} of sets\n\\end{definition}")
+    assert "term-synonyms" not in d.body_html
+
+
+def test_own_title_term_synonyms_render_inline():
+    (d,) = parse("\\begin{definition}[Union]\nthe \\term[set union]{union} of sets\n\\end{definition}")
+    assert ('<strong class="defined-term">union</strong> '
+            '<span class="term-synonyms">(also: set union)</span>') in d.body_html

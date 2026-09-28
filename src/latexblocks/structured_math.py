@@ -416,10 +416,15 @@ def _build_definition_synonyms(block: MathBlock) -> None:
     _parse_manual_synonyms(block)
     # A \term naming the block's own title or one of its synonyms just marks
     # the primary term in the body: bold, but no separate entry and no id
-    # (the card itself already carries that label)
+    # (the card itself already carries that label). Its own synonyms join
+    # the block's.
     primary = {block.label} | {lbl for _, lbl in block.synonyms}
     for term in [t for t in block.terms if t.label in primary]:
         block.terms.remove(term)
+        for syn, lbl in term.synonyms:
+            if lbl not in primary:
+                primary.add(lbl)
+                block.synonyms.append((syn, lbl))
         block.body_html = block.body_html.replace(
             f'<strong class="defined-term" id="{term.label}">',
             '<strong class="defined-term">', 1)

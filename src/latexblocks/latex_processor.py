@@ -826,7 +826,8 @@ class _Parser:
     def _term(self, n) -> str:
         """\\term[syn, syn]{text}: a further term the enclosing definition
         defines. Renders like \\textbf, with the term's label as the id so
-        references to it land on the word itself."""
+        references to it land on the word itself, followed by any synonyms
+        as "(also: syn, syn)"."""
         if self._term_sink is None:
             self._err(n, "\\term is only supported inside the body of a "
                          "definition environment")
@@ -861,8 +862,12 @@ class _Parser:
             line=self.source[: n.pos].count("\n") + 1))
         lead = inner[: len(inner) - len(inner.lstrip())]
         trail = inner[len(inner.rstrip()):]
+        also = ""
+        if synonyms:
+            names = ", ".join(html_lib.escape(syn) for syn, _ in synonyms)
+            also = f' <span class="term-synonyms">(also: {names})</span>'
         return (f'{lead}<strong class="defined-term" id="{label}">'
-                f'{stripped}</strong>{trail}')
+                f'{stripped}</strong>{also}{trail}')
 
     def _fix_image_path(self, path: str) -> str:
         if re.match(r"^(https?:|data:|/)", path):
