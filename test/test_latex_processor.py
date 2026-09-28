@@ -249,7 +249,7 @@ def test_at_shorthand_requires_label():
 
 
 def test_tabular_basic():
-    h = prose("\\begin{tabular}{lr}\nA & B \\\\\nx & y \\\\\n\\end{tabular}")
+    h = prose("\\begin{tabular}{lr}\nA & B \\\\\n\\hline\nx & y \\\\\n\\end{tabular}")
     assert h == (
         "<table>\n"
         "<thead>\n"
@@ -272,7 +272,7 @@ def test_tabular_math_ampersand_not_split():
     # & inside $...$ is part of the opaque math node at the AST level (the
     # walker consumes the whole $...$ span before the tabular-row splitter
     # ever sees it), so a matrix cell must stay one cell, not two.
-    h = prose("\\begin{tabular}{lc}\nSym & Val \\\\\n$H(X|Y)$ & "
+    h = prose("\\begin{tabular}{lc}\nSym & Val \\\\\n\\hline\n$H(X|Y)$ & "
               "$\\begin{pmatrix} a & b \\end{pmatrix}$ \\\\\n"
               "$I(X;Y)$ & $\\begin{pmatrix} c & d \\end{pmatrix}$ \\\\\n\\end{tabular}")
     assert 'alttext="H(X|Y)"' in h
@@ -285,6 +285,19 @@ def test_tabular_hline_ignored():
     assert "hline" not in h
     assert '<td style="text-align: left;">x</td>' in h
     assert '<td style="text-align: left;">y</td>' in h
+
+
+def test_tabular_without_header_hline_has_no_thead():
+    h = prose("\\begin{tabular}{ll}\nA & B \\\\\nx & y \\\\\n\\end{tabular}")
+    assert "<thead>" not in h and "<th" not in h
+    assert h.count("<td") == 4
+
+
+def test_tabular_later_hline_is_not_a_header():
+    h = prose("\\begin{tabular}{ll}\nA & B \\\\\nx & y \\\\\n\\hline\n"
+              "z & w \\\\\n\\end{tabular}")
+    assert "<thead>" not in h
+    assert h.count("<td") == 6
 
 
 def test_tabular_too_many_cells_is_loud():

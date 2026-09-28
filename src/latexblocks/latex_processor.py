@@ -982,26 +982,31 @@ class _Parser:
         """tabular environment -> <table>. Rows split on the `\\\\` row
         terminator (a LatexMacroNode named '\\\\'); cells split on top-level
         `&` (a LatexSpecialsNode) — math nodes like $a & b$ are opaque at
-        this level, so `&` inside math never splits a cell. `\\hline` nodes
-        are dropped (PDF-only decoration). First row is the header."""
+        this level, so `&` inside math never splits a cell. The first row is
+        a <thead> header only when an `\\hline` directly follows it (the
+        usual LaTeX header idiom); otherwise every row is body. Other
+        `\\hline` nodes are dropped (PDF-only decoration)."""
         args = n.nodeargd.argnlist if n.nodeargd else []
         group = args[-1] if args else None
         if group is None:
             self._err(n, "\\begin{tabular} requires a column-spec argument")
         aligns = self._tabular_colspec(n, group)
 
+        def is_blank_row(nodes) -> bool:
+            return all(isinstance(c, LatexCharsNode) and not c.chars.strip()
+                       for c in nodes)
+
         rows: List[List[Any]] = [[]]
+        has_header = False
         for child in n.nodelist:
             if isinstance(child, LatexMacroNode) and child.macroname == "hline":
+                if len(rows) == 2 and is_blank_row(rows[1]):
+                    has_header = True
                 continue
             if isinstance(child, LatexMacroNode) and child.macroname == "\\":
                 rows.append([])
             else:
                 rows[-1].append(child)
-
-        def is_blank_row(nodes) -> bool:
-            return all(isinstance(c, LatexCharsNode) and not c.chars.strip()
-                       for c in nodes)
 
         while rows and is_blank_row(rows[-1]):
             rows.pop()
@@ -1023,12 +1028,12 @@ class _Parser:
             return "<tr>\n" + "\n".join(tds) + "\n</tr>"
 
         out = ["<table>"]
-        if rows:
+        if has_header:
             out.append("<thead>")
             out.append(render_row(rows[0], "th"))
             out.append("</thead>")
         out.append("<tbody>")
-        for row in rows[1:]:
+        for row in rows[1:] if has_header else rows:
             out.append(render_row(row, "td"))
         out.append("</tbody>")
         out.append("</table>")
