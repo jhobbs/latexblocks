@@ -267,6 +267,7 @@ def _latex_context():
         ] + [
             macrospec.EnvironmentSpec("lstlisting", args_parser=_LstlistingArgsParser()),
             macrospec.EnvironmentSpec("tabular", "{"),
+            macrospec.EnvironmentSpec("enumerate", "["),
             macrospec.EnvironmentSpec("llm", "["),
         ],
     )
@@ -279,6 +280,25 @@ _CONTEXT = _latex_context()
 def parse_latex_file(source: str, filepath: str = "<latex>") -> Tuple[Dict[str, Any], PageDoc]:
     """Parse a .tex content file into (metadata, PageDoc)."""
     return _Parser(source, filepath).run()
+
+
+def _list_counter(number: int, style: str) -> str:
+    """An enumitem counter value: \\alph* -> a, \\roman* -> iv, ..."""
+    if style in ("alph", "Alph"):
+        letters = ""
+        while number:
+            number, rem = divmod(number - 1, 26)
+            letters = chr(ord("a") + rem) + letters
+        return letters.upper() if style == "Alph" else letters
+    if style in ("roman", "Roman"):
+        numerals = ""
+        for value, digits in ((1000, "m"), (900, "cm"), (500, "d"), (400, "cd"),
+                              (100, "c"), (90, "xc"), (50, "l"), (40, "xl"),
+                              (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+            count, number = divmod(number, value)
+            numerals += digits * count
+        return numerals.upper() if style == "Roman" else numerals
+    return str(number)
 
 
 class _Parser:
@@ -1047,6 +1067,31 @@ class _Parser:
         out.append("</table>")
         return "\n".join(out)
 
+    def _list_label_template(self, n) -> Optional[Tuple[str, str, str]]:
+        """enumitem's `[label=(\\alph*)]` on an enumerate -> (prefix,
+        counter, suffix), or None without options. The label must hold
+        exactly one counter (\\alph* \\Alph* \\arabic* \\roman* \\Roman*)
+        amid plain text; any other option is a loud error."""
+        args = n.nodeargd.argnlist if n.nodeargd else []
+        opt = args[0] if args else None
+        if opt is None:
+            return None
+        raw = opt.latex_verbatim()[1:-1].strip()
+        m = re.fullmatch(r"label\s*=\s*(.*)", raw, re.S)
+        if not m:
+            self._err(n, "enumerate options must be label=..., e.g. "
+                         "\\begin{enumerate}[label=(\\alph*)]")
+        label = m.group(1).strip()
+        if label.startswith("{") and label.endswith("}"):
+            label = label[1:-1]
+        counters = list(re.finditer(r"\\(alph|Alph|arabic|roman|Roman)\*", label))
+        prefix = label[: counters[0].start()] if len(counters) == 1 else ""
+        suffix = label[counters[0].end():] if len(counters) == 1 else ""
+        if len(counters) != 1 or any(c in prefix + suffix for c in "\\{}$"):
+            self._err(n, "enumerate label must be plain text around exactly one "
+                         "counter: \\alph*, \\Alph*, \\arabic*, \\roman*, or \\Roman*")
+        return prefix, counters[0].group(1), suffix
+
     def _list_html(self, n, ordered: bool) -> str:
         """Raw (un-islanded) <ul>/<ol> HTML. Callers own island-wrapping: the
         top-level call in _environment wraps once; recursive sublist calls
@@ -1072,8 +1117,9 @@ class _Parser:
             else:
                 items[-1].append(child)
         tag = "ol" if ordered else "ul"
+        template = self._list_label_template(n) if ordered else None
         lis = []
-        for item in items:
+        for number, item in enumerate(items, 1):
             sublists = [c for c in item if isinstance(c, LatexEnvironmentNode)
                         and c.environmentname in ("itemize", "enumerate")]
             sub_ids = {id(s) for s in sublists}
@@ -1081,5 +1127,10 @@ class _Parser:
             inner = _collapse_islands(self._prose(text_nodes))
             for sub in sublists:
                 inner += "\n" + self._list_html(sub, sub.environmentname == "enumerate")
+            if template:
+                prefix, counter, suffix = template
+                label = html_lib.escape(prefix + _list_counter(number, counter) + suffix)
+                inner = f'<span class="list-label">{label}</span> {inner}'
             lis.append(f"<li>{inner}</li>")
-        return f'<{tag}>\n' + "\n".join(lis) + f'\n</{tag}>'
+        open_tag = f'<{tag} class="labeled-list">' if template else f'<{tag}>'
+        return open_tag + '\n' + "\n".join(lis) + f'\n</{tag}>'

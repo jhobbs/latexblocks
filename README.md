@@ -225,7 +225,7 @@ against `latex_processor.py`):
 
 Standard LaTeX also works and renders to the obvious HTML: `\section` /
 `\subsection` / `\subsubsection` / `\paragraph` / `\subparagraph`,
-`itemize` / `enumerate`, `tabular` (l/c/r columns), `verbatim` and
+`itemize` / `enumerate` (with enumitem's `[label=(\alph*)]`: plain text around one of `\alph*` `\Alph*` `\arabic*` `\roman*` `\Roman*`), `tabular` (l/c/r columns), `verbatim` and
 `lstlisting` (`[language=...]` becomes a `language-*` class), `\href{url}{text}`,
 `\includegraphics[alt=...,width=...]{path}`, the inline styles
 `\emph` / `\textit` / `\textbf` / `\texttt`, and of course math — `$...$`

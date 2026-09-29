@@ -1250,3 +1250,20 @@ math .notation-ref[data-ref-url]:hover {
     padding-left: var(--gap-sm);
   }
 }
+
+/* enumerate with an enumitem label ([label=(\alph*)]): the parser writes
+   each label into the item; hang it in the list's left gutter like LaTeX */
+.labeled-list {
+  list-style: none;
+}
+
+.labeled-list > li {
+  position: relative;
+}
+
+.labeled-list > li > .list-label {
+  position: absolute;
+  right: 100%;
+  margin-right: 0.5em;
+  white-space: nowrap;
+}

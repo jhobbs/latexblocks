@@ -793,3 +793,32 @@ if __name__ == "__main__":
 
 def test_section_without_braced_title_is_loud():
     expect_error("\\subsection[Short]\nBody text.", "requires a braced title")
+
+
+def test_enumerate_label_alph():
+    h = prose("\\begin{enumerate}[label=(\\alph*)]\n\\item one\n\\item two\n\\end{enumerate}")
+    assert h == ('<ol class="labeled-list">\n'
+                 '<li><span class="list-label">(a)</span> one</li>\n'
+                 '<li><span class="list-label">(b)</span> two</li>\n'
+                 '</ol>')
+
+
+def test_enumerate_label_counter_styles():
+    items = "".join("\\item x\n" for _ in range(4))
+    for counter, fourth in [("Alph", "D"), ("arabic", "4"), ("roman", "iv"), ("Roman", "IV")]:
+        h = prose(f"\\begin{{enumerate}}[label=\\{counter}*.]\n{items}\\end{{enumerate}}")
+        assert f'<span class="list-label">{fourth}.</span>' in h, (counter, h)
+
+
+def test_enumerate_label_nested():
+    h = prose("\\begin{enumerate}\n\\item outer\n\\begin{enumerate}[label=(\\roman*)]\n"
+              "\\item inner\n\\end{enumerate}\n\\end{enumerate}")
+    assert h.startswith("<ol>\n<li>outer")
+    assert '<ol class="labeled-list">\n<li><span class="list-label">(i)</span> inner</li>' in h
+
+
+def test_enumerate_label_errors_are_loud():
+    expect_error("\\begin{enumerate}[(a)]\n\\item x\n\\end{enumerate}", "label=")
+    expect_error("\\begin{enumerate}[label=(a)]\n\\item x\n\\end{enumerate}", "counter")
+    expect_error("\\begin{enumerate}[label=\\alph*\\alph*]\n\\item x\n\\end{enumerate}",
+                 "counter")
