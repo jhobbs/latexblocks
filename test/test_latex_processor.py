@@ -789,3 +789,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_section_without_braced_title_is_loud():
+    expect_error("\\subsection[Short]\nBody text.", "requires a braced title")

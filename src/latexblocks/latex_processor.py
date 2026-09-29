@@ -746,7 +746,10 @@ class _Parser:
                 self._err(n, "sectioning commands may not appear inside "
                              "llm-marked prose")
             lvl = _SECTION_LEVELS[name]
-            title = self._prose(n.nodeargd.argnlist[-1].nodelist).strip()
+            arg = n.nodeargd.argnlist[-1]
+            if not isinstance(arg, LatexGroupNode):
+                self._err(n, f"\\{name} requires a braced title: \\{name}{{Title}}")
+            title = self._prose(arg.nodelist).strip()
             return _island(f'<h{lvl} id="{_heading_id(title)}">{title}</h{lvl}>')
         if name in ("dots", "ldots"):
             return "..."
