@@ -26,6 +26,7 @@ from .structured_math import (
     MathBlock,
     DefinedTerm,
     PageDoc,
+    SectionLabel,
     body_text,
     finalize_blocks,
     check_term_collisions,
@@ -310,6 +311,10 @@ class _Parser:
         # DefinedTerms collected by \term while parsing a definition's body;
         # None outside a definition (where \term is an error)
         self._term_sink: Optional[List[DefinedTerm]] = None
+        # Labeled sections (\\section{...}\\label{...}); _last_heading is the
+        # (title, id) of the heading _macro most recently rendered
+        self._sections: List[SectionLabel] = []
+        self._last_heading: Optional[Tuple[str, str]] = None
 
     def run(self) -> Tuple[Dict[str, Any], PageDoc]:
         try:
@@ -338,7 +343,7 @@ class _Parser:
         if problems:
             line, message = problems[0]
             raise LatexDialectError(f"{self.filepath}:{line}: {message}")
-        return metadata, PageDoc(items=items)
+        return metadata, PageDoc(items=items, sections=self._sections)
 
     # --- helpers ---
 
@@ -500,6 +505,8 @@ class _Parser:
         prose_buf: List[str] = []
         anchor: Optional[MathBlock] = None
         proof_target: Optional[MathBlock] = None
+        # (title, id) of a just-emitted heading a following \\label may name
+        heading: Optional[Tuple[str, str]] = None
 
         def flush_prose():
             if prose_buf:
@@ -559,14 +566,23 @@ class _Parser:
             elif isinstance(n, LatexMacroNode) and n.macroname in _SECTION_LEVELS:
                 flush_anchor()
                 prose_buf.append(self._macro(n))
+                heading = self._last_heading
+                continue
+            elif (isinstance(n, LatexMacroNode) and n.macroname == "label"
+                  and heading is not None):
+                self._add_section_label(n, *heading)
+                heading = None
+                continue
             elif isinstance(n, LatexCharsNode) and not n.chars.strip():
                 if anchor is None:
                     prose_buf.append(re.sub(r"\n[ \t]+", "\n", n.chars))
+                continue
             elif isinstance(n, LatexCommentNode):
                 continue
             else:
                 flush_anchor()
                 prose_buf.append(self._prose([n]))
+            heading = None
         flush_anchor()
         flush_prose()
         return items
@@ -770,6 +786,7 @@ class _Parser:
             if not isinstance(arg, LatexGroupNode):
                 self._err(n, f"\\{name} requires a braced title: \\{name}{{Title}}")
             title = self._prose(arg.nodelist).strip()
+            self._last_heading = (title, _heading_id(title))
             return _island(f'<h{lvl} id="{_heading_id(title)}">{title}</h{lvl}>')
         if name in ("dots", "ldots"):
             return "..."
@@ -839,7 +856,8 @@ class _Parser:
         if name in _METADATA_MACROS or name in _IGNORED_MACROS or name == "detach":
             return ""
         if name == "label":
-            self._err(n, "\\label is only supported at the top of a block environment")
+            self._err(n, "\\label is only supported at the top of a block environment "
+                         "or directly after a sectioning command")
         if name in ("synonyms", "tags", "notation"):
             self._err(n, f"\\{name} is only supported at the top of a block environment")
         if name == "source":
@@ -922,6 +940,18 @@ class _Parser:
         text = self._prose(opt.nodelist).strip() if opt is not None else ""
         self._check_ref_text(n, text)
         return f'<a data-dref="{html_lib.escape(label, quote=True)}">{text}</a>'
+
+    def _add_section_label(self, n, title: str, heading_id: str) -> None:
+        label = self._chars_arg(n).strip()
+        if not label:
+            self._err(n, "\\label requires a non-empty label")
+        key = MathBlock.normalize_label_from_title(label)
+        for other in self._sections:
+            if MathBlock.normalize_label_from_title(other.label) == key:
+                self._err(n, f"section label '{label}' is already used on line {other.line}")
+        self._sections.append(SectionLabel(
+            label=label, title=title, heading_id=heading_id,
+            line=self.source[: n.pos].count("\n") + 1))
 
     def _pagelink(self, n) -> str:
         opt, mand = n.nodeargd.argnlist

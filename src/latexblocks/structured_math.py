@@ -352,10 +352,23 @@ class MathBlock:
 
 
 @dataclass
+class SectionLabel:
+    """A \\label directly after a sectioning command: references to `label`
+    land on the heading's id."""
+
+    label: str
+    title: str  # heading HTML
+    heading_id: str
+    line: int
+
+
+@dataclass
 class PageDoc:
-    """Parsed page: prose HTML segments and top-level MathBlocks, in order."""
+    """Parsed page: prose HTML segments and top-level MathBlocks, in order,
+    plus the page's labeled sections."""
 
     items: List[Union[str, MathBlock]] = field(default_factory=list)
+    sections: List[SectionLabel] = field(default_factory=list)
 
     def top_blocks(self) -> List[MathBlock]:
         return [it for it in self.items if isinstance(it, MathBlock)]

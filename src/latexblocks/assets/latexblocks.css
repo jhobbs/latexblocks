@@ -326,8 +326,10 @@
    (copied verbatim from mathnotes styles/main.css)
    ============================================================ */
 
-/* Block reference links (for tooltips) */
-.block-reference {
+/* Block reference links (for tooltips), and section references (no
+   tooltip, same subtle look) */
+.block-reference,
+.section-reference {
   color: inherit;
   text-decoration: underline;
   text-decoration-style: dotted;
@@ -336,21 +338,23 @@
   text-underline-offset: 0.2em;
   transition: text-decoration-color 0.2s ease;
 }
-.block-reference:hover {
+.block-reference:hover, .section-reference:hover {
     text-decoration-color: var(--color-link);
   }
-.block-reference:active {
+.block-reference:active, .section-reference:active {
     text-decoration-color: var(--color-link);
   }
 
 /* keep the block-reference affordance dotted and subtle (rule above) */
-a.block-reference:has(math) {
+a.block-reference:has(math),
+a.section-reference:has(math) {
   text-decoration: none;
   border-bottom: 0.5px dotted color-mix(in srgb, var(--color-text-secondary) 50%, transparent);
   transition: border-bottom-color 0.2s ease;
 }
 
-a.block-reference:has(math):hover {
+a.block-reference:has(math):hover,
+a.section-reference:has(math):hover {
   border-bottom-color: var(--color-link);
 }
 

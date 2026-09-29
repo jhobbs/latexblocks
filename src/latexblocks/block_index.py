@@ -51,6 +51,16 @@ class BlockReference:
         return f"{self.canonical_url}#{self.anchor or self.block.label}"
 
 
+@dataclass
+class SectionReference:
+    """A labeled section heading, the target of \\@{label} like a block."""
+
+    label: str
+    title: str  # heading HTML
+    file_path: str
+    full_url: str
+
+
 class BlockIndex:
     """Global index of all labeled mathematical blocks across all files."""
 
@@ -60,6 +70,7 @@ class BlockIndex:
         self.all_blocks: List[BlockReference] = []  # All blocks, including unlabeled ones
         self.notation_map: Dict[str, BlockReference] = {}  # Notation macro name -> declaring block
         self._term_owners: Dict[str, str] = {}  # \\term / \\term-synonym label -> declaring file
+        self.section_index: Dict[str, SectionReference] = {}  # labeled section headings
         self._is_built = False
         # Initialize reverse index for tracking references
         self.reverse_index = ReverseIndex()
@@ -92,10 +103,14 @@ class BlockIndex:
         self.all_blocks.clear()
         self.notation_map.clear()
         self._term_owners.clear()
+        self.section_index.clear()
         self.reverse_index = ReverseIndex()
 
-        # Phase 1: Scan and index all blocks
+        # Phase 1: Scan and index all blocks, then labeled sections (after
+        # every block label, synonym, and term is known, so any collision is
+        # an error regardless of scan order)
         self._scan_directory(content_dir)
+        self._index_sections()
 
         # Phase 2: Build the reverse index by collecting all references
         self._collect_all_references()
@@ -128,10 +143,15 @@ class BlockIndex:
         # backlink ("Referenced by") panel, so an incremental rebuild that
         # only changes block B's referrers can leave a cached page that
         # @@embeds B serving B's stale backlink panel. Full builds unaffected.
-        return {
+        signatures = {
             label: (ref.canonical_url, ref.block.block_type.value, ref.block.title, ref.block.content)
             for label, ref in self.index.items()
         }
+        signatures.update({
+            label: (ref.full_url, "section", ref.title, "")
+            for label, ref in self.section_index.items()
+        })
+        return signatures
 
     def _invalidate_stale_renders(self, previous_signatures: Dict[str, tuple]):
         """Invalidate cached page renders affected by added/removed/changed blocks.
@@ -303,6 +323,21 @@ class BlockIndex:
             for term in block.terms:
                 self._register_term(block, term, file_path,
                                     f"{prefix}/{canonical_url}", page_title)
+
+    def _index_sections(self):
+        prefix = get_config().url_prefix
+        for file_info in self._pending_files:
+            file_path = file_info["file_path"]
+            for section in file_info["pagedoc"].sections:
+                key = MathBlock.normalize_label_from_title(section.label)
+                other = self.section_index.get(key) or self.index.get(key)
+                if other is not None:
+                    raise LatexDialectError(
+                        f"{file_path}:{section.line}: section label '{section.label}' "
+                        f"collides with an existing label in {other.file_path}")
+                self.section_index[key] = SectionReference(
+                    label=section.label, title=section.title, file_path=file_path,
+                    full_url=f"{prefix}/{file_info['canonical_url']}#{section.heading_id}")
 
     def _register_term(self, block, term, file_path, canonical_url, page_title):
         """Index a \\term's label, its synonyms, and its auto plurals/singulars
@@ -507,6 +542,10 @@ class BlockIndex:
         # Normalize label for lookup
         normalized_label = MathBlock.normalize_label_from_title(label)
         return self.index.get(normalized_label)
+
+    def get_section(self, label: str) -> Optional[SectionReference]:
+        """Get a labeled section heading by its label."""
+        return self.section_index.get(MathBlock.normalize_label_from_title(label))
 
     def find_blocks_by_type(self, block_type: str) -> List[BlockReference]:
         """Find all blocks of a specific type."""

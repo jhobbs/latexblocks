@@ -166,6 +166,14 @@ class RefResolver:
             return (f'<a href="{bref.full_url}" class="{css}" '
                     f'data-ref-type="{block.block_type.value}" '
                     f'data-ref-label="{html_lib.escape(label, quote=True)}">{text}</a>')
+        section = (self.block_index.get_section(label)
+                   if bref is None and self.block_index is not None
+                   and hasattr(self.block_index, "get_section") else None)
+        if section and ref_type in (None, "section"):
+            text = custom_text if custom_text.strip() else section.title
+            return (f'<a href="{section.full_url}" class="section-reference" '
+                    f'data-ref-type="section" '
+                    f'data-ref-label="{html_lib.escape(label, quote=True)}">{text}</a>')
         shown_ref = html_lib.escape(ref)
         if custom_text.strip():
             shown = f"@{{{html_lib.escape(custom_text)}|{shown_ref}}}"

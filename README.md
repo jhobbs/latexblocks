@@ -214,6 +214,7 @@ against `latex_processor.py`):
 | `\dref{label}` | Same as `\@{label}`. |
 | `\@[custom text]{label}` / `\dref[custom text]{label}` | Reference with explicit link text. |
 | `\dref{type:label}` | Reference with type validation; renders a `block-reference-error` span if the target's type differs. |
+| `\section{Title}\label{label}` | A `\label` directly after a sectioning command (same line or next) makes the heading a reference target: `\@{label}` links to it with the heading as link text, from any page, and `\dref{section:label}` type-checks it. A label colliding with any block, synonym, term, or other section label is an error. |
 | `\pagelink{slug}` / `\pagelink[text]{slug}` | Link to a page by slug, resolved through the URL mapper. |
 | `\dembed{label}` | Transclude the target block's full rendered card inline. Page level only — inside a block body it can fail with an order-dependent build error if the target hasn't rendered yet. |
 | `\notation{\macro}{expansion}` | At the top of a block: declare a site-wide math macro whose every use links back to this block. |
