@@ -179,3 +179,63 @@ if __name__ == "__main__":
             failed += 1; print(f"FAIL {fn.__name__}"); traceback.print_exc()
     print(f"{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+def _mo(mathml, name):
+    import re
+    m = re.search(r'<mo[^>]*>' + name + '</mo>', mathml)
+    assert m, mathml
+    return m.group(0)
+
+
+def test_worker_named_operator_spacing_follows_tex():
+    # Browsers give an <mo> missing from their operator dictionary (inf, sup,
+    # lim, max, ...) a thick space on both sides; the worker sets TeX's
+    # spacing explicitly instead.
+    reqs = [{"id": i, "latex": t, "display": True} for i, t in enumerate([
+        "\\inf \\left\\{ x \\right\\}",   # 0: flush against a \left fence
+        "\\sup \\{ x \\}",                 # 1: flush against an open brace
+        "a = \\inf_{k} x_k",               # 2: embellished; = supplies its own space
+        "2\\max(a,b)",                     # 3: thin after an ordinary, none before (
+        "\\liminf x",                      # 4: two-word operator name
+    ])]
+    r = worker_roundtrip(reqs)
+    assert 'lspace="0" rspace="0"' in _mo(r[0]["mathml"], "inf")
+    assert 'lspace="0" rspace="0"' in _mo(r[1]["mathml"], "sup")
+    assert 'lspace="0" rspace="0.1667em"' in _mo(r[2]["mathml"], "inf")
+    assert 'lspace="0.1667em" rspace="0"' in _mo(r[3]["mathml"], "max")
+    assert 'lspace="0" rspace="0.1667em"' in _mo(r[4]["mathml"], "lim&#x2006;inf")
+
+
+def test_worker_leaves_dictionary_operators_alone():
+    (r,) = worker_roundtrip([{"id": 1, "latex": "\\sum_k x = y", "display": True}])
+    assert "lspace" not in r["mathml"] and "rspace" not in r["mathml"]
+
+
+def _mos(mathml, text):
+    import re
+    return re.findall(r'<mo[^>]*>' + re.escape(text) + '</mo>', mathml)
+
+
+def test_worker_vertical_bar_and_slash_spacing_follows_tex():
+    # A bare | or / in the middle of an expression is an infix operator to
+    # the browser (thick/medium space both sides); TeX spaces them as
+    # ordinary symbols.
+    reqs = [{"id": i, "latex": t, "display": False} for i, t in enumerate([
+        "|A| = 0",       # 0: bars flush against A; = supplies its own space
+        "x + |A|",       # 1: + supplies its own space
+        "\\inf |x|",     # 2: thin space between operator and bar, carried once
+        "a/b",           # 3: slash flush
+    ])]
+    r = worker_roundtrip(reqs)
+    for mo in _mos(r[0]["mathml"], "|") + _mos(r[1]["mathml"], "|"):
+        assert 'lspace="0" rspace="0"' in mo, r
+    assert 'lspace="0" rspace="0"' in _mo(r[2]["mathml"], "inf")
+    first_bar = _mos(r[2]["mathml"], "|")[0]
+    assert 'lspace="0.1667em" rspace="0"' in first_bar
+    assert 'lspace="0" rspace="0"' in _mos(r[3]["mathml"], "/")[0]
+
+
+def test_worker_mid_keeps_relation_spacing():
+    (r,) = worker_roundtrip([{"id": 1, "latex": "a \\mid b", "display": False}])
+    assert "lspace" not in r["mathml"]

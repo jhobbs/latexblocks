@@ -73,6 +73,77 @@ const MathJax = await mathjax.init({
   },
 });
 
+// Some <mo>s get the wrong space from the browser's operator dictionary:
+// named operators (\inf, \sup, \lim, \max, ...) aren't in it and get a thick
+// space each side, so `\inf\{` renders with a gap; a bare | or / in the
+// middle of an expression is spaced as an infix operator, so |A| = 0 renders
+// as "|A |  =". For these "respaced" operators, set lspace/rspace to TeX's
+// inter-atom spacing (MathJax's texSpacing() over the TeX classes) instead.
+// Each gap between siblings gets one owner: a respaced operator on its
+// right (as lspace), else one on its left (as rspace); a gap next to any
+// other mo is left to that mo's dictionary spacing. A \left...\right group
+// counts as an opening delimiter after a named operator, flush like \{.
+const STATE = MathJax._.core.MathItem.STATE;
+const { TEXCLASS } = MathJax._.core.MmlTree.MmlNode;
+const SPACE_EM = {
+  '': '0', thinmathspace: '0.1667em', mediummathspace: '0.2222em',
+  thickmathspace: '0.2778em',
+};
+
+function isNamedOperator(mo) {
+  return mo.isKind('mo') && mo.texClass === TEXCLASS.OP
+    && /^[A-Za-z][A-Za-z\s]*$/.test(mo.getText());
+}
+
+function isRespaced(node) {
+  if (!node?.isEmbellished) return false;
+  const mo = node.coreMO();
+  if (!mo.isKind('mo')) return false;
+  return isNamedOperator(mo)
+    || (['|', '/'].includes(mo.getText())
+        && ![TEXCLASS.REL, TEXCLASS.BIN].includes(mo.texClass));
+}
+
+function opensWithFence(node) {
+  return node.texClass === TEXCLASS.INNER
+    && node.childNodes[0]?.texClass === TEXCLASS.OPEN;
+}
+
+// TeX space before `right`, or 0 when a dictionary-spaced mo sits on the
+// other side of the gap and supplies it
+function gapSpace(left, right) {
+  if (!left || !right) return '0';
+  if ((left.isEmbellished && !isRespaced(left))
+      || (right.isEmbellished && !isRespaced(right))) return '0';
+  if (isNamedOperator(left.coreMO?.() ?? left) && opensWithFence(right)) return '0';
+  return SPACE_EM[right.texSpacing()];
+}
+
+function setOperatorSpacing(node) {
+  for (const child of node.childNodes || []) {
+    if (child && !child.isToken) setOperatorSpacing(child);
+  }
+  if (!node.isInferred && !node.isKind('mrow') && !node.isKind('math')) return;
+  const kids = node.childNodes;
+  kids.forEach((kid, i) => {
+    if (!isRespaced(kid)) return;
+    const prev = kids[i - 1];
+    const next = kids[i + 1];
+    const lspace = gapSpace(prev, kid);
+    const rspace = isRespaced(next) ? '0' : gapSpace(kid, next);
+    kid.coreMO().attributes.set('lspace', lspace);
+    kid.coreMO().attributes.set('rspace', rspace);
+  });
+}
+
+function tex2mml(latex, display) {
+  const root = MathJax.startup.document.convert(
+    latex, { display, end: STATE.CONVERT });
+  root.setTeXclass(null);
+  setOperatorSpacing(root);
+  return MathJax.startup.toMML(root);
+}
+
 function escapeAttr(s) {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -120,7 +191,7 @@ rl.on('line', (line) => {
   }
   let resp;
   try {
-    let mml = MathJax.tex2mml(req.latex, { display: !!req.display });
+    let mml = tex2mml(req.latex, !!req.display);
     // single line: keeps page HTML compact and paragraph splitting inert
     mml = mml.replace(/\n\s*/g, '');
     mml = toMathMLCore(mml);
