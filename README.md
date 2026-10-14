@@ -237,11 +237,12 @@ Inside `align*`, `gather*`, `alignat*`, `flalign*`, `\intertext{...}` and
 `\shortintertext{...}` work as in amsmath/mathtools: a prose row at the left
 margin that wraps, with the alignment preserved across it (the worker's own
 MathJax extension, `assets/tex-intertext.mjs`; MathJax upstream has none). The
-prose is plain text plus `$...$` (or `\(...\)`) inline math, the text escapes
-`\& \% \# \_ \$ \{ \}`, `~`, and LaTeX's grouping braces; any other macro, a
-bare `& # ^ _ %`, or a blank line is an error, and so is `\intertext` inside
-`aligned` (`\bal ... \eal`), as in LaTeX. The layout needs container-query
-units (Chrome 105+, Firefox 110+, Safari 16+).
+prose is ordinary dialect prose: `\@{label}` / `\dref` / `\pagelink`
+references, `\emph` and friends, `$...$` inline math (the processor renders
+it and the worker only sees a placeholder). Block-level content there is an
+error, and so is `\intertext` inside `aligned` (`\bal ... \eal`), as in
+LaTeX. The layout needs container-query units (Chrome 105+, Firefox 110+,
+Safari 16+).
 Anything the dialect does not recognize is a loud build error with `file:line`,
 never silently dropped.
 

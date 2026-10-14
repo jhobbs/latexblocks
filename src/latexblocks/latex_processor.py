@@ -7,6 +7,7 @@ becomes output markup.
 
 import os
 import re
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 from pylatexenc import latexwalker, macrospec
@@ -125,17 +126,20 @@ def _expand_preexpansion(source: str, macros: Optional[Dict[str, str]] = None) -
     return pattern.sub(lambda m: macros[m.group(1)], source)
 
 
-def render_math(latex: str, display: bool) -> str:
+def render_math(latex: str, display: bool, alttext: Optional[str] = None) -> str:
     """THE math seam: every math node renders through this one function.
 
     Build-time MathML: delegate to the persistent MathJax node worker. The
     return value is serializer output — well-formed markup, inserted raw.
     Raises MathConversionError on unconvertible TeX; the emitter turns that
-    into a LatexDialectError with file:line.
+    into a LatexDialectError with file:line. `alttext` is the author's
+    source when `latex` is not (display environments substitute placeholders
+    for their \\intertext prose).
     """
     stripped = latex.strip()
     return get_converter().convert(
-        _wrap_notation_macros(stripped), display, alttext=stripped)
+        _wrap_notation_macros(stripped), display,
+        alttext=stripped if alttext is None else alttext)
 
 
 class LatexDialectError(ValueError):
@@ -163,6 +167,10 @@ _TABULAR_ALIGN = {"l": "left", "c": "center", "r": "right"}
 # environment would number in the PDF but not on the page.
 _DISPLAY_MATH_ENVS = {"align*", "gather*", "multline*", "equation*"}
 _NUMBERED_MATH_ENVS = {"align", "gather", "multline", "equation"}
+# \intertext{...} / \shortintertext{...} inside those: the argument is dialect
+# prose, rendered here; the worker sees a placeholder in its place
+_INTERTEXT_RE = re.compile(r"\\(?:short)?intertext\s*\{")
+_INTERTEXT_PLACEHOLDER = "LBINTERTEXT%d"
 
 _THEOREM_LIKE = {"theorem", "lemma", "proposition"}
 _ATTACHABLE_NOTES = {"note", "remark", "example", "intuition"}
@@ -988,6 +996,56 @@ class _Parser:
         except MathConversionError as e:
             self._err(n, f"math does not convert to MathML: {e}")
 
+    def _display_math_env_html(self, n) -> str:
+        """align*, gather*, ...: the environment renders whole through the
+        math seam, except the argument of each \\intertext / \\shortintertext,
+        which is dialect prose (references, emphasis, inline math, ...). That
+        prose is parsed in text mode at its real source position (so errors
+        keep their line) and rendered by _prose; the worker gets a plain-text
+        placeholder in its place and the HTML is spliced into the prose block
+        it emits (an HTML span inside mtext, so links and nested math are
+        legal there)."""
+        start, end = n.pos, n.pos + n.len
+        pieces: List[str] = []
+        fragments: List[str] = []
+        cursor = start
+        for m in _INTERTEXT_RE.finditer(self.source, start, end):
+            if m.start() < cursor:  # inside a previous argument
+                continue
+            arg_start = m.end()
+            walker = LatexWalker(self.source, latex_context=_CONTEXT, tolerant_parsing=False)
+            try:
+                nodes, pos, length = walker.get_latex_nodes(
+                    pos=arg_start, stop_upon_closing_brace="}")
+            except latexwalker.LatexWalkerParseError as e:
+                raise LatexDialectError(f"{self.filepath}: {e}") from e
+            closing = pos + length - 1  # index of the matching brace
+            # newlines in the prose would let paragraph splitting cut the
+            # span (TeX reads them as spaces; a blank line is tolerated the
+            # way MathJax tolerated it)
+            html = re.sub(r"[ \t]*\n\s*", " ", self._prose(nodes))
+            if _ISLAND in html:
+                self._err(SimpleNamespace(pos=arg_start),
+                          "block-level content is not allowed in \\intertext prose")
+            pieces.append(self.source[cursor:arg_start] + _INTERTEXT_PLACEHOLDER % len(fragments))
+            fragments.append(html)
+            cursor = closing
+        pieces.append(self.source[cursor:end])
+        try:
+            mml = render_math("".join(pieces).strip(), True,
+                              alttext=self.source[start:end].strip())
+        except MathConversionError as e:
+            self._err(n, f"math does not convert to MathML: {e}")
+        for i, html in enumerate(fragments):
+            placeholder = _INTERTEXT_PLACEHOLDER % i
+            if mml.count(placeholder) > 1:
+                raise LatexDialectError(
+                    f"{self.filepath}: internal: intertext placeholder {placeholder} "
+                    f"appears {mml.count(placeholder)} times in the MathML")
+            # (zero: the \\intertext sat in a TeX comment the worker dropped)
+            mml = mml.replace(placeholder, html)
+        return mml
+
     def _environment(self, n) -> str:
         name = n.environmentname
         if name in ("itemize", "enumerate"):
@@ -997,10 +1055,7 @@ class _Parser:
         if name == "tabular":
             return _island(self._tabular_html(n))
         if name in _DISPLAY_MATH_ENVS:
-            try:
-                return render_math(n.latex_verbatim().strip(), True)
-            except MathConversionError as e:
-                self._err(n, f"math does not convert to MathML: {e}")
+            return self._display_math_env_html(n)
         if name in _NUMBERED_MATH_ENVS:
             self._err(n, f"numbered {name} is unsupported (the site does not number "
                          f"equations): use {name}* and \\tag{{...}} where a number is wanted")

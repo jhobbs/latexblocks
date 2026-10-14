@@ -847,17 +847,36 @@ def test_display_math_environment_bad_tex_is_loud():
 def test_intertext_in_display_math_environment():
     h = prose("\\begin{align*}\na &= b \\\\\n\\intertext{and so, with $x<1$,}\nc &= d\n\\end{align*}")
     assert 'class="has-intertext"' in h
-    assert '<span class="intertext-text">and so, with <math>' in h
-    assert h.count("<math") == 2
+    # the prose is rendered by _prose: inline math is a full <math> element
+    assert '<span class="intertext-text">and so, with <math ' in h
+    assert h.count("<math") == 2 and "LBINTERTEXT" not in h
     h = prose("\\begin{align*} a &= b \\shortintertext{so} c &= d \\end{align*}")
     assert 'class="intertext intertext-short"' in h
+
+
+def test_intertext_prose_is_dialect_prose():
+    h = prose("\\begin{align*}\na &= b \\\\\n\\intertext{so \\@{foo}, \\emph{very} $x<1$ {grouped}, "
+              "and \\dref[custom]{bar}}\nc &= d\n\\end{align*}")
+    span = h[h.index('<span class="intertext-text">'):]
+    assert span.startswith('<span class="intertext-text">so <a data-dref="foo"></a>, <em>very</em> <math ')
+    assert 'alttext="x&lt;1"' in span
+    assert '<a data-dref="bar">custom</a>' in span
+    assert " grouped," in span and "{grouped}" not in span
+    assert h.count("<math") == 2 and "LBINTERTEXT" not in h
+    # the display's own alttext is the author's source, placeholders and all
+    assert "\\intertext{so \\@{foo}, \\emph{very} $x&lt;1$ {grouped}" in h[: h.index("<mtable")]
+
+
+def test_intertext_prose_errors_keep_their_line():
+    expect_error("Line one.\n\n\\begin{align*}\na &= b \\\\\n\\intertext{so \\foo{x} here}\nc &= d\n\\end{align*}",
+                 "page.tex:7: unsupported command \\foo")  # DOC prepends 2 lines
+    expect_error("\\begin{align*} a &= b \\\\ \\intertext{\\begin{itemize}\\item x\\end{itemize}} "
+                 "c &= d \\end{align*}", "block-level content is not allowed in \\intertext prose")
 
 
 def test_intertext_outside_alignment_is_loud():
     # \bal...\eal is aligned, where amsmath rejects \intertext too
     expect_error("\\bal a &= b \\\\ \\intertext{x} c &= d \\eal", "Invalid use of \\intertext")
-    expect_error("\\begin{align*} a &= b \\\\ \\intertext{so \\emph{x}} c &= d \\end{align*}",
-                 "\\emph in \\intertext prose is unsupported")
 
 
 def test_blank_line_inside_math_keeps_alttext_intact():
