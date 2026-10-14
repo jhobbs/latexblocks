@@ -239,3 +239,141 @@ def test_worker_vertical_bar_and_slash_spacing_follows_tex():
 def test_worker_mid_keeps_relation_spacing():
     (r,) = worker_roundtrip([{"id": 1, "latex": "a \\mid b", "display": False}])
     assert "lspace" not in r["mathml"]
+
+
+# \intertext / \shortintertext (src/latexblocks/assets/tex-intertext.mjs):
+# an amsmath-style prose row inside the alignment's own mtable, laid out by
+# flank columns + a column-spanning HTML block; see mathnotes
+# docs/superpowers/specs/2026-10-14-intertext-design.md for the contract.
+
+def test_worker_intertext_markup_contract():
+    (r,) = worker_roundtrip([{"id": 1, "latex":
+        "\\begin{align*} a &= b \\\\ \\intertext{and so, since $x<1$ we get} c &= d \\end{align*}",
+        "display": True}])
+    assert "error" not in r, r
+    m = r["mathml"]
+    assert 'class="has-intertext"' in m[:m.index(">")]  # on the root <math>
+    assert '<mtable ' in m and 'width="100%"' in m and 'class="intertext"' in m
+    assert 'columnalign="center right left center"' in m  # flanks are columns too
+    assert m.count('<mtd class="intertext-flank"></mtd>') == 4  # 2 per equation row
+    assert ('<mtr class="intertext"><mtd columnalign="left" class="intertext" columnspan="4">'
+            '<mpadded width="0"><mtext><span class="intertext-text">and so, since <math>') in m
+    assert '</math> we get</span></mtext></mpadded></mtd></mtr>' in m
+    assert '<mo>&lt;</mo>' in m  # nested math stays escaped
+    assert m.count("<math") == 2 and m.count("</math>") == 2
+    assert "&#xA0;" not in m  # run boundaries are plain spaces so the prose wraps
+
+
+def test_worker_intertext_variants():
+    import re
+    reqs = [{"id": i, "latex": t, "display": True} for i, t in enumerate([
+        "\\begin{gather*} a = b \\\\ \\intertext{thus} c = d \\end{gather*}",
+        "\\begin{align*} a &= b \\intertext{mid-row, no CR before} c &= d \\end{align*}",
+        "\\begin{align*} f(x)^2 &= b' \\intertext{after pending items} c &= d \\end{align*}",
+        "\\begin{align*} a &= b \\\\ \\intertext{last line} \\end{align*}",
+        "\\begin{align*} \\intertext{first} a &= b \\end{align*}",
+        "\\begin{align*} a &= b \\\\ \\shortintertext{short} c &= d \\end{align*}",
+        "\\begin{align*} a &= b \\\\ \\intertext{line one\n   line two} c &= d \\end{align*}",
+        "\\begin{align*} a &= b \\tag{1} \\\\ \\intertext{tagged} c &= d \\end{align*}",
+        "\\begin{alignat*}{2} a &= b & c &= d \\\\ \\intertext{alignat} e &= f \\end{alignat*}",
+        "\\begin{align*} a &= b \\\\ \\intertext{one} \\intertext{two} c &= d \\end{align*}",
+        "\\begin{align*} a &= b \\\\ \\intertext{A \\& B, 5\\% of~this} c &= d \\end{align*}",
+        "\\begin{align*} a &= b \\\\ \\intertext{a $\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}$ b} c &= d \\end{align*}",
+    ])]
+    rs = worker_roundtrip(reqs)
+    for r in rs:
+        assert "error" not in r, r
+    ms = [r["mathml"] for r in rs]
+    assert 'columnspan="3"' in ms[0] and 'columnalign="center center center"' in ms[0]
+    assert ms[1].count("<mtr") == 3  # the row is ended for you, as amsmath does
+    assert ms[2].count("<mtr") == 3 and "<msup>" in ms[2]
+    assert ms[3].count("<mtr") == 2 and ms[3].endswith("last line</span></mtext></mpadded></mtd></mtr></mtable></math>")
+    assert ms[4].count("<mtr") == 2 and ms[4].index('class="intertext"') < ms[4].index("<mi>a</mi>")
+    assert 'class="intertext intertext-short"' in ms[5]
+    assert "line one line two" in ms[6]
+    # a \tag label rides in the right flank (an extra auto column would
+    # overflow the display next to two 50% flanks); no mlabeledtr, and the
+    # table does not get the math-tagged layout rules
+    assert "mlabeledtr" not in ms[7] and "math-tagged" not in ms[7]
+    assert re.search(r'<mtr><mtd class="intertext-flank"></mtd><mtd><mi>a</mi></mtd><mtd>.*?</mtd>'
+                     r'<mtd id="mjx-eqn:1" class="intertext-flank math-tag" columnalign="right">'
+                     r'<mtext>\(1\)</mtext></mtd></mtr>', ms[7])
+    assert ms[7].count("intertext-flank") == 4
+    assert 'columnspan="6"' in ms[8] and 'columnspacing="0em 0em 0em 0em 0em"' in ms[8]
+    assert ms[9].count('<mtr class="intertext">') == 2 and ms[9].count("<mtr") == 4
+    assert "A &amp; B, 5% of&#xA0;this" in ms[10]
+    assert ms[11].count("<mtable") == 2 and ms[11].count("</mtd>") == 4 + 1 + 4 + 4  # nested cells untouched
+    assert "</math> b</span></mtext></mpadded></mtd></mtr>" in ms[11]
+
+
+def test_worker_intertext_invalid_uses_are_errors():
+    bad = [
+        "\\begin{aligned} a &= b \\\\ \\intertext{x} c &= d \\end{aligned}",
+        "\\begin{align*} \\begin{split} a &= b \\\\ \\intertext{x} c &= d \\end{split} \\end{align*}",
+        "\\begin{cases} 1 & x \\\\ \\intertext{x} 0 & y \\end{cases}",
+        "\\begin{align*} a &= \\left( b \\intertext{x} \\right) \\end{align*}",
+        "\\begin{align*} a &= {b \\intertext{x}} \\end{align*}",
+        "a \\intertext{x} b",
+    ]
+    rs = worker_roundtrip([{"id": i, "latex": t, "display": True} for i, t in enumerate(bad)])
+    for r in rs:
+        assert "error" in r and "Invalid use of \\intertext" in r["error"], r
+    (r,) = worker_roundtrip([{"id": 1, "display": True, "latex":
+        "\\begin{align*} a &= b \\\\ \\intertext{so \\emph{very} true} c &= d \\end{align*}"}])
+    assert "error" in r and "\\emph in \\intertext prose is unsupported" in r["error"], r
+
+
+def test_worker_intertext_short_rows_are_padded():
+    # MathJax leaves rows short; the right flank (or \tag label) must stay in
+    # the flank column, else a 50%-wide cell lands in an equation column
+    import re
+    reqs = [{"id": i, "latex": t, "display": True} for i, t in enumerate([
+        "\\begin{align*} a &= b & c &= d \\\\ \\intertext{x} e &= f \\end{align*}",
+        "\\begin{align*} a &= b \\\\ \\intertext{so} c \\end{align*}",
+        "\\begin{align*} a &= b & c &= d \\\\ \\intertext{x} e &= f \\tag{2} \\end{align*}",
+    ])]
+    for r, cells in zip(worker_roundtrip(reqs), (6, 4, 6)):
+        assert "error" not in r, r
+        rows = re.findall(r"<mtr>(.*?)</mtr>", r["mathml"])  # equation rows only
+        assert len(rows) == 2, r["mathml"]
+        for row in rows:
+            tds = re.findall(r"<mtd\b[^>]*>", row)
+            assert len(tds) == cells, (row, cells)
+            assert tds[0] == '<mtd class="intertext-flank">' and "intertext-flank" in tds[-1]
+
+
+def test_worker_intertext_gather_spacing_and_alttext_dollars():
+    r1, r2, r3 = worker_roundtrip([
+        {"id": 1, "latex": "\\begin{gather*} a = b \\\\ \\intertext{thus} c = d \\end{gather*}", "display": True},
+        {"id": 2, "latex": "\\begin{align*} a &= b \\\\ \\intertext{$x$'s value and $y$$z$ too} c &= d \\end{align*}", "display": True},
+        {"id": 3, "latex": "\\text{$x$'s}", "display": False},
+    ])
+    assert 'columnspacing="0em 0em"' in r1["mathml"]  # one column, two flank gaps
+    # $' $& $$ in the TeX must not be expanded by the alttext insertion
+    for r in (r2, r3):
+        assert "error" not in r, r
+        assert r["mathml"].count("<math") == r["mathml"].count("</math>")
+    assert "\\intertext{$x$'s value and $y$$z$ too}" in r2["mathml"]
+    assert r3["mathml"].startswith("<math alttext=\"\\text{$x$'s}\"") and r3["mathml"].count("</math>") == 1
+    (r4,) = worker_roundtrip([{"id": 4, "latex": "\\text{a\nb}", "display": False}])
+    assert "a&#10;b" in r4["mathml"]  # newline in alttext as a character reference
+
+
+def test_worker_intertext_prose_validation():
+    bad = [
+        ("\\ref{eq}", "\\ref"), ("\\eqref{eq}", "\\eqref"), ("a \\\\ b", "\\\\"), ("a \\\\", "\\\\"),
+        ("5% of", "bare %"), ("a & b", "bare &"), ("x_1", "bare _"), ("x^2", "bare ^"), ("#1", "bare #"),
+        ("so \\emph{very}", "\\emph"),
+        ("in \\class{notation-ref notation-ref--integers}{\\mathbb{Z}} we", "\\integers"),
+    ]
+    reqs = [{"id": i, "display": True,
+             "latex": "\\begin{align*} a &= b \\\\ \\intertext{" + t + "} c &= d \\end{align*}"}
+            for i, (t, _) in enumerate(bad)]
+    for r, (t, frag) in zip(worker_roundtrip(reqs), bad):
+        assert "error" in r and frag in r["error"], (t, r)
+    # bare braces are LaTeX grouping (invisible); escaped ones are literal
+    (r,) = worker_roundtrip([{"id": 1, "display": True, "latex":
+        "\\begin{align*} a &= b \\\\ \\intertext{a {b} c \\{d\\} 5\\% \\#1 x\\_y $\\{e\\}$ \\(f\\)} c &= d \\end{align*}"}])
+    assert "error" not in r, r
+    assert '<span class="intertext-text">a b c {d} 5% #1 x_y <math>' in r["mathml"]
+    assert r["mathml"].count("<math>") == 2

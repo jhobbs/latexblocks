@@ -45,17 +45,45 @@ def test_parse_collects_terms():
     assert ("Estimators", "estimators") in d.auto_generated_synonyms
 
 
-def test_term_outside_definition_is_error():
+def test_term_outside_a_block_is_error():
     with pytest.raises(LatexDialectError, match=r"t\.tex:\d+: \\term is only supported"):
-        parse(r"\begin{theorem}[X] an \term{estimate} \end{theorem}")
-    with pytest.raises(LatexDialectError, match="only supported"):
         parse(r"Page prose \term{estimate}.")
 
 
-def test_term_in_nested_non_definition_is_error():
-    src = (r"\begin{definition}[A] a \begin{note} \term{b} \end{note} \end{definition}")
-    with pytest.raises(LatexDialectError, match="only supported"):
-        parse(src)
+def test_term_in_any_block_type():
+    (t,) = parse(r"\begin{theorem}[Rank Theorem] the \term[column rank]{rank} of $A$ "
+                 r"\end{theorem}")
+    assert [(x.title, x.label, x.synonyms) for x in t.terms] == [
+        ("rank", "rank", [("column rank", "column-rank")])]
+    assert ("ranks", "ranks") in t.terms[0].auto_generated_synonyms
+    assert '<strong class="defined-term" id="rank">rank</strong>' in t.body_html
+    # a theorem's own title gets no auto plurals (only definitions do)
+    assert t.auto_generated_synonyms == []
+
+
+def test_term_in_nested_block_belongs_to_that_block():
+    (d,) = parse(r"\begin{definition}[A] a \begin{note} \term{b} \end{note} \end{definition}")
+    assert d.terms == []
+    assert [x.label for x in d.children[0].terms] == ["b"]
+
+
+def test_term_naming_theorem_title_marks_primary_term():
+    (t,) = parse(r"\begin{theorem}[Pythagoras] by \term{Pythagoras} and \term{hypotenuse} "
+                 r"\end{theorem}")
+    assert [x.label for x in t.terms] == ["hypotenuse"]
+    assert '<strong class="defined-term">Pythagoras</strong>' in t.body_html
+
+
+def test_term_in_theorem_references_end_to_end():
+    def run():
+        _, renderer = _build({
+            "content/la.tex": "\\begin{theorem}[Rank Theorem]\nthe \\term{rank} of $A$\n\\end{theorem}\n",
+            "content/uses.tex": "\\title{Uses}\n\nThe \\@{rank} and \\@{ranks}.\n"})
+        html = renderer.render_page("content/uses.tex")["content"]
+        assert ('<a href="/mathnotes/la/#rank" class="block-reference" '
+                'data-ref-type="theorem" data-ref-label="rank">rank</a>') in html
+        assert 'data-ref-label="ranks">ranks</a>' in html
+    _in_tmp(run)
 
 
 def test_duplicate_term_in_block_is_error():

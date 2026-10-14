@@ -312,6 +312,11 @@
      mathnotes theme.css; defined here so the standalone sheet is complete.
      Each derives from a theme var, so it tracks light/dark automatically. --- */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Prose font, for the rare prose the library sets inside math
+     (\intertext rows); value from mathnotes main.css body */
+  --font-prose: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* math font-size relative to the surrounding text (see `math` below) */
+  --lb-math-scale: 1.125;
   --color-text-muted: var(--color-text-secondary);
   --color-success: #1a7f37;
   --color-code-green: #1a7f37;
@@ -789,6 +794,13 @@ a.section-reference:has(math):hover {
   }
 
 /* Tooltip styles */
+/* a tooltip is shrink-to-fit; an intertext display inside it has no
+   intrinsic width (inline-size container), so give such tooltips their
+   full width instead of the 200px minimum */
+.math-tooltip:has(math.has-intertext) {
+  width: var(--size-tooltip-max);
+}
+
 .math-tooltip {
   position: absolute;
   z-index: 10000;
@@ -1072,7 +1084,7 @@ a.section-reference:has(math):hover {
 math {
   font-family: 'Latin Modern Math', math;
   /* math fonts draw visually small next to the UI font */
-  font-size: 1.125em;
+  font-size: calc(1em * var(--lb-math-scale));
 }
 
 /* MathJax's scroll containers are gone; wide display equations scroll
@@ -1119,6 +1131,83 @@ mrow.mml-cancel {
     currentColor 51.5%,
     transparent 52.5%
   );
+}
+
+/* \intertext / \shortintertext (worker: assets/tex-intertext.mjs). The
+   prose is a column-spanning row (mtr.intertext) of the alignment's own
+   mtable, so the alignment survives the interruption. The table is widened
+   to the display and every equation row gets an empty flank cell at each
+   end: two equal percentage columns absorb the slack, which keeps the
+   equation group centered whatever the prose width (plain table layout;
+   measured in Gecko, Chromium and WebKit, same as .math-tagged above).
+   The prose itself is an HTML block inside mtext (an HTML integration
+   point), because no engine wraps mtext. The worker wraps that mtext in
+   mpadded width="0" so the sentence does not count toward the table's
+   intrinsic width (Gecko sizes the cell from the MathML content's
+   max-content width, the whole sentence on one line, whatever the block's
+   own width); the block's definite 100cqw width then makes it wrap at the
+   display's edge. Chromium and WebKit agree with both. */
+math.has-intertext {
+  container-type: inline-size;
+}
+
+mtable.intertext {
+  /* the display's width as an absolute length, not 100%: WebKit resolved
+     the percentage against nothing once the prose sat in an mpadded
+     (table collapsed to its content); a container-query length is
+     resolved before table layout in every engine */
+  width: 100cqw;
+}
+
+/* after .math-tagged's first-child rule: a tagged table's first cell is a
+   flank, and 50/50 flanks still leave the label on the right margin */
+mtable.intertext > mtr > mtd.intertext-flank {
+  width: 50%;
+}
+
+/* empty flanks keep no UA cell padding (0.4em each side in Chromium), so
+   an alignment needs no more width than it did without the prose; the
+   \tag label keeps its inset like .math-tag labels elsewhere */
+mtable.intertext > mtr > mtd.intertext-flank:not(.math-tag) {
+  padding-inline: 0;
+}
+
+/* a \tag label rides in the right flank (the worker puts it there: an
+   extra auto column would stick out past the display next to two 50%
+   flanks); right-aligned, so it sits on the margin as in LaTeX */
+mtable.intertext > mtr > mtd.intertext-flank.math-tag {
+  text-align: right;
+}
+
+mtd.intertext {
+  text-align: left;
+  /* flush with the display's left edge, like \noindent prose */
+  padding-inline: 0;
+  /* amsmath: \belowdisplayskip above the prose, \abovedisplayskip below */
+  padding-block: 0.75em;
+}
+
+mtd.intertext-short {
+  /* mathtools: the short display skips, plus 3pt */
+  padding-block: 0.25em 0.5em;
+}
+
+.intertext-text {
+  display: block;
+  white-space: normal;
+  width: 100cqw;
+  /* prose, not math: the page's text font at the page's text size (undo
+     the `math` scale), with normal prose leading */
+  font-family: var(--font-prose);
+  font-size: calc(1em / var(--lb-math-scale));
+  line-height: var(--line-height-base);
+  /* (nested inline math then gets the normal `math` scale of this size,
+     the same as inline math in a paragraph) */
+  /* WebKit's MathML UA sheet sets -webkit-line-box-contain: glyphs replaced,
+     which the span inherits through mtext: line boxes shrink to glyph
+     height, so the prose lost its leading and a one-line block came out
+     shorter than its text. Restore normal line boxes there. */
+  -webkit-line-box-contain: block inline;
 }
 
 /* Notation references: math symbols that link to their defining block.

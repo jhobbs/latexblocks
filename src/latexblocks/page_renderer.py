@@ -13,7 +13,7 @@ from typing import Dict, Optional
 from .config import get_config
 from .content_loader import load_content_file
 from .ref_resolver import RefResolver, labels_from_rendered_html
-from .structured_math import MathBlock
+from .structured_math import MathBlock, sub_math_elements
 
 _render_cache: Dict[str, tuple] = {}  # filepath -> (mtime, result)
 
@@ -87,7 +87,7 @@ class PageRenderer:
         # page doesn't set one explicitly.
         description = metadata.get("description", "")
         if not description:
-            clean = re.sub(r"<math\b.*?</math>", " ", html_content, flags=re.DOTALL)
+            clean = sub_math_elements(html_content, lambda _tag: " ")
             clean = re.sub(r"<[^>]+>", "", clean)
             clean = re.sub(r"\s+", " ", clean).strip()
             sentences = clean.split(". ")

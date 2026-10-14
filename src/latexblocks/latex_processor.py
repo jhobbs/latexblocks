@@ -158,6 +158,11 @@ _CHARS_ARG_ESCAPES = {
     "textbackslash": "\\", "textasciitilde": "~",
 }
 _TABULAR_ALIGN = {"l": "left", "c": "center", "r": "right"}
+# amsmath display environments, rendered whole by the math seam. Only the
+# unnumbered forms: the site does not auto-number equations, so a numbered
+# environment would number in the PDF but not on the page.
+_DISPLAY_MATH_ENVS = {"align*", "gather*", "multline*", "equation*"}
+_NUMBERED_MATH_ENVS = {"align", "gather", "multline", "equation"}
 
 _THEOREM_LIKE = {"theorem", "lemma", "proposition"}
 _ATTACHABLE_NOTES = {"note", "remark", "example", "intuition"}
@@ -308,8 +313,8 @@ class _Parser:
         self.filepath = filepath
         self._demo_counter = 0
         self._in_llm = False
-        # DefinedTerms collected by \term while parsing a definition's body;
-        # None outside a definition (where \term is an error)
+        # DefinedTerms collected by \term while parsing a block's body;
+        # None outside a block (where \term is an error)
         self._term_sink: Optional[List[DefinedTerm]] = None
         # Labeled sections (\\section{...}\\label{...}); _last_heading is the
         # (title, id) of the heading _macro most recently rendered
@@ -641,7 +646,7 @@ class _Parser:
         body = self._extract_env_metadata(list(n.nodelist), n, extracted,
                                           notations)
         terms: List[DefinedTerm] = []
-        self._term_sink = terms if n.environmentname == "definition" else None
+        self._term_sink = terms
         seen_notation_names = set()
         for notation_name, _ in notations:
             if notation_name in seen_notation_names:
@@ -865,13 +870,13 @@ class _Parser:
         self._err(n, f"unsupported command \\{name} — extend the dialect in latex_processor.py if needed")
 
     def _term(self, n) -> str:
-        """\\term[syn, syn]{text}: a further term the enclosing definition
+        """\\term[syn, syn]{text}: a term the enclosing block (any type)
         defines. Renders like \\textbf, with the term's label as the id so
         references to it land on the word itself, followed by any synonyms
         as "(also: syn, syn)"."""
         if self._term_sink is None:
             self._err(n, "\\term is only supported inside the body of a "
-                         "definition environment")
+                         "block environment")
         opt, mand = n.nodeargd.argnlist
         inner = self._prose(mand.nodelist)
         stripped = inner.strip()
@@ -991,6 +996,14 @@ class _Parser:
             return self._code_html(n)
         if name == "tabular":
             return _island(self._tabular_html(n))
+        if name in _DISPLAY_MATH_ENVS:
+            try:
+                return render_math(n.latex_verbatim().strip(), True)
+            except MathConversionError as e:
+                self._err(n, f"math does not convert to MathML: {e}")
+        if name in _NUMBERED_MATH_ENVS:
+            self._err(n, f"numbered {name} is unsupported (the site does not number "
+                         f"equations): use {name}* and \\tag{{...}} where a number is wanted")
         if name == "llm":
             return _island(self._llm_env_html(n))
         if name in _BLOCK_ENV_NAMES:

@@ -233,6 +233,13 @@ def test_description_strips_math_elements():
         {}, '<p>Intro <math alttext="x^2"><mi>x</mi></math> continues here.</p>')
     assert desc == "Intro continues here."
     assert "<math" not in desc and "x" not in desc.replace("Intro", "")
+    # a display whose intertext prose embeds inline math: the whole outer
+    # element goes, nested <math> included
+    desc = pr._generate_description(
+        {}, '<p>Intro <math alttext="a" display="block"><mtable><mtr><mtd><mtext>'
+            '<span class="intertext-text">so <math><mi>x</mi></math> then</span>'
+            '</mtext></mtd></mtr></mtable></math> continues here.</p>')
+    assert desc == "Intro continues here."
 
 
 def test_text_with_math_to_html():
@@ -276,6 +283,25 @@ def test_render_block_html_shows_notation():
         assert "notation-ref--integers" not in html_out[i:i + 400], html_out[i:i + 400]
     finally:
         notation.reset_registry()
+
+def test_math_to_dollar_text_tolerates_nested_math():
+    # an \intertext prose row embeds inline <math> inside the display's own
+    # <math>; the scanner must take the whole outer element
+    h = ('<p>A <math alttext="\\begin{align*} a \\intertext{so $x$} \\end{align*}" display="block">'
+         '<mtable><mtr><mtd><mtext><span class="intertext-text">so <math><mi>x</mi></math> then</span>'
+         '</mtext></mtd></mtr></mtable></math> B <math alttext="y"><mi>y</mi></math> C</p>')
+    assert math_to_dollar_text(h) == (
+        "<p>A $$\\begin{align*} a \\intertext{so $x$} \\end{align*}$$ B $y$ C</p>")
+    # unterminated element: runs to the end rather than looping or raising
+    assert math_to_dollar_text('<p>x <math alttext="a"><mi>a</mi>') == "<p>x $a$"
+
+
+def test_iter_math_elements_spans():
+    from latexblocks.structured_math import iter_math_elements, sub_math_elements
+    h = '<math><math><mi>x</mi></math></math>-<math><mi>y</mi></math>'
+    spans = [(s, e) for s, e, _ in iter_math_elements(h)]
+    assert spans == [(0, 36), (37, 60)]
+    assert sub_math_elements(h, lambda tag: " ") == " - "
 
 
 if __name__ == "__main__":

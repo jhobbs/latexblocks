@@ -822,3 +822,51 @@ def test_enumerate_label_errors_are_loud():
     expect_error("\\begin{enumerate}[label=(a)]\n\\item x\n\\end{enumerate}", "counter")
     expect_error("\\begin{enumerate}[label=\\alph*\\alph*]\n\\item x\n\\end{enumerate}",
                  "counter")
+
+
+def test_starred_display_math_environments():
+    for env in ("align*", "gather*", "multline*", "equation*"):
+        body = "a &= b \\\\ c &= d" if env == "align*" else "a = b"
+        h = prose(f"Before\n\\begin{{{env}}}\n{body}\n\\end{{{env}}}\nafter.")
+        assert 'display="block"' in h, (env, h)
+        assert f'alttext="\\begin{{{env}}}' in h, (env, h)
+        assert h.startswith("<p>Before") and h.rstrip().endswith("after.</p>"), h
+    h = prose("\\begin{align*} a &= b \\tag{1} \\end{align*}")
+    assert "<mtable" in h
+
+
+def test_numbered_display_math_environment_is_loud():
+    expect_error("\\begin{align} a &= b \\end{align}", "align*")
+    expect_error("\\begin{equation} a = b \\end{equation}", "equation*")
+
+
+def test_display_math_environment_bad_tex_is_loud():
+    expect_error("\\begin{align*} \\notamacro \\end{align*}", "MathML")
+
+
+def test_intertext_in_display_math_environment():
+    h = prose("\\begin{align*}\na &= b \\\\\n\\intertext{and so, with $x<1$,}\nc &= d\n\\end{align*}")
+    assert 'class="has-intertext"' in h
+    assert '<span class="intertext-text">and so, with <math>' in h
+    assert h.count("<math") == 2
+    h = prose("\\begin{align*} a &= b \\shortintertext{so} c &= d \\end{align*}")
+    assert 'class="intertext intertext-short"' in h
+
+
+def test_intertext_outside_alignment_is_loud():
+    # \bal...\eal is aligned, where amsmath rejects \intertext too
+    expect_error("\\bal a &= b \\\\ \\intertext{x} c &= d \\eal", "Invalid use of \\intertext")
+    expect_error("\\begin{align*} a &= b \\\\ \\intertext{so \\emph{x}} c &= d \\end{align*}",
+                 "\\emph in \\intertext prose is unsupported")
+
+
+def test_blank_line_inside_math_keeps_alttext_intact():
+    # MathJax treats a blank line inside math as a space (pdflatex would
+    # reject it; existing content relies on the tolerance). The worker
+    # writes newlines into alttext as character references, so paragraph
+    # splitting never cuts the attribute in two.
+    h = prose("Before\n\\[ a\n\n+ b \\]\nafter.")
+    assert h.count("<p>") == 1, h
+    assert 'alttext="a&#10;&#10;+ b"' in h, h
+    h = prose("\\begin{align*} a &= b \\\\ \\intertext{one\n\ntwo} c &= d \\end{align*}")
+    assert h.count("<p>") == 1 and "one two" in h, h

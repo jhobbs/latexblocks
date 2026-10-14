@@ -187,7 +187,7 @@ attachment context; *attachments* fall into the currently-open anchor; a
 
 | Environment | Behavior | Chains by |
 |---|---|---|
-| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` or `axiom` auto-labels from its title; a `definition` may declare `\synonyms` and mark further terms it defines with `\term`; `explanation` is free-standing expository prose. |
+| `definition`, `axiom`, `explanation` | **standalone** | Emitted at top level; close any open anchor. A titled `definition` or `axiom` auto-labels from its title; a `definition` may declare `\synonyms`; any block may mark terms it defines with `\term`; `explanation` is free-standing expository prose. |
 | `theorem`, `lemma`, `proposition`, `exercise` | **anchor** | Open a fresh attachment context that following proofs / notes fall into. |
 | `corollary` | **attach-or-anchor** | Attaches to the open anchor if there is one; otherwise becomes an anchor itself. |
 | `proof` | **attachment** → statement | Attaches inside the current `theorem`/`lemma`/`proposition`/`corollary` (or `exercise`); auto-labels `proof-of-<label>`, appends an automatic QED `\square`. Errors if no statement precedes it. |
@@ -219,7 +219,7 @@ against `latex_processor.py`):
 | `\dembed{label}` | Transclude the target block's full rendered card inline. Page level only — inside a block body it can fail with an order-dependent build error if the target hasn't rendered yet. |
 | `\notation{\macro}{expansion}` | At the top of a block: declare a site-wide math macro whose every use links back to this block. |
 | `\synonyms{a, b}` | At the top of a **definition**: register alternate titles (also auto-plurals/singulars) as reference aliases. |
-| `\term{text}` / `\term[syn, syn]{text}` | Inside a **definition** body: a further term the block defines (the title is the primary one). Renders bold, followed by any synonyms as `(also: syn, syn)`, gets its own label (`\term{estimate}` → `estimate`), optional synonyms, and auto plurals/singulars; references land on the term itself (`#estimate`) and count toward the block's "Referenced by" panel. A `\term` naming the block's own title or synonym just marks the primary term; its synonyms are added to the block's own. A collision with any other label is an error (same-file ones at parse time, with the term's line). |
+| `\term{text}` / `\term[syn, syn]{text}` | Inside any block's body (a definition, theorem, note, ...): a term the block defines (a definition's title is its primary term). Renders bold, followed by any synonyms as `(also: syn, syn)`, gets its own label (`\term{estimate}` → `estimate`), optional synonyms, and auto plurals/singulars; references land on the term itself (`#estimate`) and count toward the block's "Referenced by" panel. A `\term` naming the block's own title or synonym just marks the primary term; its synonyms are added to the block's own. A collision with any other label is an error (same-file ones at parse time, with the term's line). |
 | `\tags{a, b}` | At the top of a block: attach classification chips. |
 | `\label{label}` | At the top of a block: set its explicit label (else auto-generated). |
 | `\title{...}`, `\description{...}`, `\slug{...}` | Page metadata (all optional; `\slug` overrides the URL derived from the path). |
@@ -230,7 +230,18 @@ Standard LaTeX also works and renders to the obvious HTML: `\section` /
 `lstlisting` (`[language=...]` becomes a `language-*` class), `\href{url}{text}`,
 `\includegraphics[alt=...,width=...]{path}`, the inline styles
 `\emph` / `\textit` / `\textbf` / `\texttt`, and of course math — `$...$`
-inline and `\[...\]` (or the `\bal ... \eal` aligned shorthand) display.
+inline and `\[...\]` (or the `\bal ... \eal` aligned shorthand) display, plus the
+unnumbered amsmath environments `align*`, `gather*`, `multline*`, and `equation*`
+(numbered forms are an error: the site does not number equations; use `\tag`).
+Inside `align*`, `gather*`, `alignat*`, `flalign*`, `\intertext{...}` and
+`\shortintertext{...}` work as in amsmath/mathtools: a prose row at the left
+margin that wraps, with the alignment preserved across it (the worker's own
+MathJax extension, `assets/tex-intertext.mjs`; MathJax upstream has none). The
+prose is plain text plus `$...$` (or `\(...\)`) inline math, the text escapes
+`\& \% \# \_ \$ \{ \}`, `~`, and LaTeX's grouping braces; any other macro, a
+bare `& # ^ _ %`, or a blank line is an error, and so is `\intertext` inside
+`aligned` (`\bal ... \eal`), as in LaTeX. The layout needs container-query
+units (Chrome 105+, Firefox 110+, Safari 16+).
 Anything the dialect does not recognize is a loud build error with `file:line`,
 never silently dropped.
 

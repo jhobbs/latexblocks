@@ -15,7 +15,8 @@ from enum import Enum
 CHILD_MARKER_RE = re.compile("\x02(\\d+)\x02")
 _DREF_TEXT_RE = re.compile(r'<a data-dref="([^"]+)">(.*?)</a>', re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
-_MATH_EL_RE = re.compile(r"<math\b[^>]*>.*?</math>", re.DOTALL)
+_MATH_OPEN_RE = re.compile(r"<math\b[^>]*>")
+_MATH_TAG_RE = re.compile(r"<(/?)math\b[^>]*>")
 _ALTTEXT_RE = re.compile(r'\balttext="([^"]*)"')
 _INLINE_MATH_RE = re.compile(r"\$([^$]+)\$")
 
@@ -59,17 +60,51 @@ _IRREGULAR_SINGULARS = {v: k for k, v in _IRREGULAR_PLURALS.items()}
 _INVARIANT_NOUNS = {'series', 'species'}
 
 
+def iter_math_elements(html_str: str):
+    """Yield (start, end, open_tag) for each top-level <math> element.
+
+    Depth-aware, because a display may embed inline math inside it (an
+    \\intertext prose row holds nested <math> elements); a non-greedy
+    regex would stop at the inner close tag and leave MathML fragments
+    behind. Serializer output is well-formed; an unterminated element runs
+    to the end of the string."""
+    pos = 0
+    while True:
+        m = _MATH_OPEN_RE.search(html_str, pos)
+        if not m:
+            return
+        depth, scan = 1, m.end()
+        while depth:
+            t = _MATH_TAG_RE.search(html_str, scan)
+            if not t:
+                scan = len(html_str)
+                break
+            scan = t.end()
+            depth += -1 if t.group(1) else 1
+        yield m.start(), scan, m.group(0)
+        pos = scan
+
+
+def sub_math_elements(html_str: str, repl) -> str:
+    """Replace each top-level <math> element with repl(open_tag)."""
+    out, last = [], 0
+    for start, end, open_tag in iter_math_elements(html_str):
+        out.append(html_str[last:start])
+        out.append(repl(open_tag))
+        last = end
+    out.append(html_str[last:])
+    return "".join(out)
+
+
 def math_to_dollar_text(html_str: str) -> str:
     """Replace <math> elements with their $-delimited alttext TeX (display
     math gets $$), so snippet and heading-id derivation see the same text
     the $-delimiter era produced. No-op on HTML without <math> elements."""
-    def repl(m):
-        el = m.group(0)
-        open_tag = el[: el.index(">") + 1]
+    def repl(open_tag):
         alt = _ALTTEXT_RE.search(open_tag)
         tex = html_lib.unescape(alt.group(1)) if alt else ""
         return f"$${tex}$$" if 'display="block"' in open_tag else f"${tex}$"
-    return _MATH_EL_RE.sub(repl, html_str)
+    return sub_math_elements(html_str, repl)
 
 
 def body_text(html_str: str) -> str:
@@ -412,8 +447,7 @@ def finalize_blocks(top_blocks: List[MathBlock]) -> None:
                 block.label = f"{block.block_type.value}-{counter}"
         # Untitled, unlabeled top-level theorem-likes auto-number via the
         # counter fallback above rather than erroring.
-        if block.block_type == MathBlockType.DEFINITION:
-            _build_definition_synonyms(block)
+        _build_synonyms(block)
         if "tags" in block.metadata and not block.tags:
             block.tags = [
                 t.strip().strip('"') for t in block.metadata["tags"].split(",") if t.strip()
@@ -425,7 +459,10 @@ def finalize_blocks(top_blocks: List[MathBlock]) -> None:
         visit(b)
 
 
-def _build_definition_synonyms(block: MathBlock) -> None:
+def _build_synonyms(block: MathBlock) -> None:
+    """Synonyms and auto plurals/singulars for a block's \\terms, and for a
+    definition's own title and \\synonyms (other block types' titles get no
+    auto forms)."""
     _parse_manual_synonyms(block)
     # A \term naming the block's own title or one of its synonyms just marks
     # the primary term in the body: bold, but no separate entry and no id
@@ -459,7 +496,7 @@ def _build_definition_synonyms(block: MathBlock) -> None:
             block.auto_generated_synonyms.append((name, label))
 
     names = [syn for syn, _ in block.synonyms]
-    if block.title:
+    if block.title and block.block_type == MathBlockType.DEFINITION:
         names.append(block.title)
     for name in names:
         add_auto(MathBlock.generate_plural(name))

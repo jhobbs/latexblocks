@@ -7,6 +7,7 @@ import { createInterface } from 'node:readline';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { registerIntertext, layoutIntertext, intertextCellsToHtml } from './tex-intertext.mjs';
 
 // The worker lives inside an installed Python package, where no node_modules
 // exists above it, so a bare `import mathjax` cannot resolve. The consumer's
@@ -60,6 +61,14 @@ if (!styPath) {
 
 const MathJax = await mathjax.init({
   loader: { load: ['input/tex', '[tex]/cancel', '[tex]/html'] },
+  startup: {
+    // intertext is our own TeX extension (tex-intertext.mjs); a package
+    // must be registered after input/tex loads and before the jax is built
+    ready() {
+      registerIntertext(globalThis.MathJax);
+      globalThis.MathJax.startup.defaultReady();
+    },
+  },
   tex: {
     // input/tex bundles base+ams+newcommand+autoload. noundefined would
     // render undefined macros as red text instead of erroring; drop it so
@@ -67,7 +76,7 @@ const MathJax = await mathjax.init({
     // eagerly loaded here because the synchronous tex2mml API cannot service
     // autoload's async retry mechanism (html provides \class, which
     // render_math uses to tag notation references).
-    packages: { '[-]': ['noundefined'], '[+]': ['cancel', 'html'] },
+    packages: { '[-]': ['noundefined'], '[+]': ['cancel', 'html', 'intertext'] },
     macros: parseStyMacros(readFileSync(styPath, 'utf8')),
     formatError: (_jax, err) => { throw err; },
   },
@@ -141,11 +150,17 @@ function tex2mml(latex, display) {
     latex, { display, end: STATE.CONVERT });
   root.setTeXclass(null);
   setOperatorSpacing(root);
+  // \intertext rows: flank columns + spans on the tree, and a class on the
+  // root so the stylesheet can make the display a size container
+  if (layoutIntertext(root)) root.attributes.set('class', 'has-intertext');
   return MathJax.startup.toMML(root);
 }
 
 function escapeAttr(s) {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // newlines as character references: a raw newline in alttext would let
+  // the processor's paragraph splitting cut the attribute in two
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\r/g, '&#13;').replace(/\n/g, '&#10;');
 }
 
 // MathJax emits two elements that were dropped from MathML Core, which is
@@ -158,8 +173,13 @@ function escapeAttr(s) {
 //    with class="mml-cancel" (CSS draws the diagonal strike).
 function toMathMLCore(mml) {
   if (mml.includes('<mlabeledtr>')) {
+    // the mtable may already carry a class (intertext); merge, never
+    // duplicate the attribute (HTML parsers drop the second one)
+    const addClass = (attrs, cls) => /\bclass="/.test(attrs)
+      ? attrs.replace(/\bclass="([^"]*)"/, `class="$1 ${cls}"`)
+      : `${attrs} class="${cls}"`;
     mml = mml.replace(/<mtable([^>]*)><mlabeledtr>/g,
-                      '<mtable$1 class="math-tagged"><mlabeledtr>');
+                      (_, attrs) => `<mtable${addClass(attrs, 'math-tagged')}><mlabeledtr>`);
     mml = mml.replace(
       /<mlabeledtr>(<mtd[^>]*>.*?<\/mtd>)(.*?)<\/mlabeledtr>/g,
       (_, label, rest) =>
@@ -194,11 +214,16 @@ rl.on('line', (line) => {
     let mml = tex2mml(req.latex, !!req.display);
     // single line: keeps page HTML compact and paragraph splitting inert
     mml = mml.replace(/\n\s*/g, '');
+    // \intertext prose cells become an HTML block (wraps) with nested
+    // inline <math>; must run on the single-line form
+    mml = intertextCellsToHtml(mml);
     mml = toMathMLCore(mml);
     // alttext override: render_math sends the \class-wrapped TeX as latex
     // but the author's original TeX as alttext (snippets and heading ids
     // derive from alttext and must not see the wrapper)
-    mml = mml.replace('<math', `<math alttext="${escapeAttr(req.alttext ?? req.latex)}"`);
+    // (function replacer: a string replacement would expand $' $& $$ found
+    // in the author's TeX)
+    mml = mml.replace('<math', () => `<math alttext="${escapeAttr(req.alttext ?? req.latex)}"`);
     resp = { id: req.id, mathml: mml };
   } catch (err) {
     resp = { id: req.id, error: String(err.message || err) };
