@@ -145,6 +145,33 @@ function setOperatorSpacing(node) {
   });
 }
 
+// MathML Core dropped mtable's columnalign, so Chromium and WebKit center
+// every cell and an aligned display's relation signs drift apart whenever
+// its rows differ in width (Firefox honors the attribute). Stamp each cell
+// with its column's alignment; the stylesheet maps mtd[columnalign] to
+// text-align, which every engine honors. center is the default everywhere
+// and is left unstamped. mlabeledtr's first child is the label, not a column.
+function stampCellAlignment(node) {
+  if (node.isKind('mtable')) {
+    const spec = String(node.attributes.getExplicit('columnalign') ?? '').trim();
+    if (spec) {
+      const aligns = spec.split(/\s+/);
+      for (const row of node.childNodes) {
+        const cells = row.isKind('mlabeledtr') ? row.childNodes.slice(1) : row.childNodes;
+        cells.forEach((cell, i) => {
+          const align = aligns[Math.min(i, aligns.length - 1)];
+          if (align !== 'center' && cell.isKind('mtd') && !cell.attributes.getExplicit('columnalign')) {
+            cell.attributes.set('columnalign', align);
+          }
+        });
+      }
+    }
+  }
+  for (const child of node.childNodes || []) {
+    if (child && !child.isToken) stampCellAlignment(child);
+  }
+}
+
 function tex2mml(latex, display) {
   const root = MathJax.startup.document.convert(
     latex, { display, end: STATE.CONVERT });
@@ -153,6 +180,7 @@ function tex2mml(latex, display) {
   // \intertext rows: flank columns + spans on the tree, and a class on the
   // root so the stylesheet can make the display a size container
   if (layoutIntertext(root)) root.attributes.set('class', 'has-intertext');
+  stampCellAlignment(root);
   return MathJax.startup.toMML(root);
 }
 

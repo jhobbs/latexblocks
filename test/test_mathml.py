@@ -295,7 +295,8 @@ def test_worker_intertext_variants():
     # overflow the display next to two 50% flanks); no mlabeledtr, and the
     # table does not get the math-tagged layout rules
     assert "mlabeledtr" not in ms[7] and "math-tagged" not in ms[7]
-    assert re.search(r'<mtr><mtd class="intertext-flank"></mtd><mtd><mi>a</mi></mtd><mtd>.*?</mtd>'
+    assert re.search(r'<mtr><mtd class="intertext-flank"></mtd><mtd columnalign="right"><mi>a</mi></mtd>'
+                     r'<mtd columnalign="left">.*?</mtd>'
                      r'<mtd id="mjx-eqn:1" class="intertext-flank math-tag" columnalign="right">'
                      r'<mtext>\(1\)</mtext></mtd></mtr>', ms[7])
     assert ms[7].count("intertext-flank") == 4
@@ -377,3 +378,21 @@ def test_worker_intertext_prose_validation():
     assert "error" not in r, r
     assert '<span class="intertext-text">a b c {d} 5% #1 x_y <math>' in r["mathml"]
     assert r["mathml"].count("<math>") == 2
+
+
+def test_worker_stamps_cell_alignment_for_core_engines():
+    # MathML Core has no columnalign on mtable: Chromium/WebKit center every
+    # cell. The worker copies each column's alignment onto its cells (the
+    # stylesheet maps mtd[columnalign] to text-align); center stays unstamped.
+    r1, r2, r3, r4 = worker_roundtrip([
+        {"id": 1, "latex": "\\begin{aligned} a &= b \\\\ cccc &= d \\end{aligned}", "display": True},
+        {"id": 2, "latex": "\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}", "display": True},
+        {"id": 3, "latex": "\\begin{align*} a &= b \\tag{1} \\\\ c &= d \\end{align*}", "display": True},
+        {"id": 4, "latex": "\\begin{align*} a &= b \\\\ \\intertext{t} c &= d \\end{align*}", "display": True},
+    ])
+    assert r1["mathml"].count('<mtd columnalign="right">') == 2
+    assert r1["mathml"].count('<mtd columnalign="left">') == 2
+    assert "columnalign=" not in r2["mathml"].split("<mtr>")[1]  # matrix cells untouched
+    assert 'class="math-tag"' in r3["mathml"] and r3["mathml"].count('<mtd columnalign="right">') == 2
+    assert r4["mathml"].count('<mtd class="intertext-flank"></mtd>') == 4  # flanks untouched
+    assert r4["mathml"].count('<mtd columnalign="right">') == 2

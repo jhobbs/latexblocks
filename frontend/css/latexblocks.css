@@ -1152,6 +1152,19 @@ mtd.math-tag {
   padding-block: 0;
 }
 
+/* Column alignment: MathML Core dropped mtable's columnalign, so Chromium
+   and WebKit center every cell and the relation signs of an aligned display
+   drift apart when its rows differ in width. The build worker stamps each
+   cell with its column's alignment; text-align on a cell is honored by
+   every engine (Firefox agrees with its native columnalign handling). */
+mtd[columnalign="left"] {
+  text-align: left;
+}
+
+mtd[columnalign="right"] {
+  text-align: right;
+}
+
 /* \cancel{...}: the build worker rewrites menclose (absent from MathML
    Core) to this mrow; draw the diagonal strike ourselves */
 mrow.mml-cancel {

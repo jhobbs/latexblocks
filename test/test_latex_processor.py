@@ -848,7 +848,8 @@ def test_intertext_in_display_math_environment():
     h = prose("\\begin{align*}\na &= b \\\\\n\\intertext{and so, with $x<1$,}\nc &= d\n\\end{align*}")
     assert 'class="has-intertext"' in h
     # the prose is rendered by _prose: inline math is a full <math> element
-    assert '<span class="intertext-text">and so, with <math ' in h
+    # a space next to an inline element is U+00A0 (Gecko trims plain ones)
+    assert '<span class="intertext-text">and so, with\u00a0<math ' in h
     assert h.count("<math") == 2 and "LBINTERTEXT" not in h
     h = prose("\\begin{align*} a &= b \\shortintertext{so} c &= d \\end{align*}")
     assert 'class="intertext intertext-short"' in h
@@ -858,10 +859,10 @@ def test_intertext_prose_is_dialect_prose():
     h = prose("\\begin{align*}\na &= b \\\\\n\\intertext{so \\@{foo}, \\emph{very} $x<1$ {grouped}, "
               "and \\dref[custom]{bar}}\nc &= d\n\\end{align*}")
     span = h[h.index('<span class="intertext-text">'):]
-    assert span.startswith('<span class="intertext-text">so <a data-dref="foo"></a>, <em>very</em> <math ')
+    assert span.startswith('<span class="intertext-text">so\u00a0<a data-dref="foo"></a>,\u00a0<em>very</em>\u00a0<math ')
     assert 'alttext="x&lt;1"' in span
     assert '<a data-dref="bar">custom</a>' in span
-    assert " grouped," in span and "{grouped}" not in span
+    assert "\u00a0grouped," in span and "{grouped}" not in span
     assert h.count("<math") == 2 and "LBINTERTEXT" not in h
     # the display's own alttext is the author's source, placeholders and all
     assert "\\intertext{so \\@{foo}, \\emph{very} $x&lt;1$ {grouped}" in h[: h.index("<mtable")]
@@ -889,3 +890,12 @@ def test_blank_line_inside_math_keeps_alttext_intact():
     assert 'alttext="a&#10;&#10;+ b"' in h, h
     h = prose("\\begin{align*} a &= b \\\\ \\intertext{one\n\ntwo} c &= d \\end{align*}")
     assert h.count("<p>") == 1 and "one two" in h, h
+
+
+def test_nbsp_at_run_boundaries():
+    from latexblocks.latex_processor import _nbsp_at_run_boundaries as f
+    assert f("a <em>b</em> c") == "a\u00a0<em>b</em>\u00a0c"
+    assert f("<em> b </em>") == "<em>\u00a0b\u00a0</em>"
+    assert f("x</math> <a>y</a>") == "x</math>\u00a0<a>y</a>"
+    assert f(" lead and trail ") == " lead and trail "  # only next to a tag
+    assert f('<math alttext="a b"><mi>x</mi></math>') == '<math alttext="a b"><mi>x</mi></math>'

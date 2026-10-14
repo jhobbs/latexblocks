@@ -172,6 +172,27 @@ _NUMBERED_MATH_ENVS = {"align", "gather", "multline", "equation"}
 _INTERTEXT_RE = re.compile(r"\\(?:short)?intertext\s*\{")
 _INTERTEXT_PLACEHOLDER = "LBINTERTEXT%d"
 
+
+def _nbsp_at_run_boundaries(html: str) -> str:
+    """A space at either end of a text run next to a tag becomes U+00A0.
+
+    Gecko applies MathML's token whitespace trimming to every text node
+    under an mtext, HTML descendants included, so in Firefox the space
+    before or after an inline element in \\intertext prose (inline math, a
+    reference, \\emph) simply vanishes: "Because a and b" renders as
+    "Becausea andb". No-break spaces are not trimmed, every engine draws
+    them as a space, and lines still break at the element boundary
+    (measured in Firefox 156, Chromium, WebKit)."""
+    parts = re.split(r"(<[^>]+>)", html)
+    for i in range(0, len(parts), 2):
+        text = parts[i]
+        if i > 0 and text.startswith(" "):
+            text = "\u00a0" + text[1:]
+        if i < len(parts) - 1 and text.endswith(" "):
+            text = text[:-1] + "\u00a0"
+        parts[i] = text
+    return "".join(parts)
+
 _THEOREM_LIKE = {"theorem", "lemma", "proposition"}
 _ATTACHABLE_NOTES = {"note", "remark", "example", "intuition"}
 _LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_:-]*$")
@@ -1023,7 +1044,8 @@ class _Parser:
             # newlines in the prose would let paragraph splitting cut the
             # span (TeX reads them as spaces; a blank line is tolerated the
             # way MathJax tolerated it)
-            html = re.sub(r"[ \t]*\n\s*", " ", self._prose(nodes))
+            html = _nbsp_at_run_boundaries(
+                re.sub(r"[ \t]*\n\s*", " ", self._prose(nodes)))
             if _ISLAND in html:
                 self._err(SimpleNamespace(pos=arg_start),
                           "block-level content is not allowed in \\intertext prose")
