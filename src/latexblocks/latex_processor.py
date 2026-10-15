@@ -8,7 +8,7 @@ becomes output markup.
 import os
 import re
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
 
 from pylatexenc import latexwalker, macrospec
 from pylatexenc.latexwalker import (
@@ -57,23 +57,45 @@ def _wrap_notation_macros(latex: str) -> str:
     )
 
 
-# Structural shorthand macros (\bal ... \eal): parameterless one-line \def's
-# read from the PRE-EXPANSION MACROS section of the configured .sty (the
-# single source of truth, shared with pdflatex) and expanded textually before
-# the pylatexenc walk — pylatexenc parses surface syntax without expanding
-# macros, so anything that changes document structure (like opening display
-# math) must be substituted first. Bodies are required to be single-line so
-# node positions keep mapping to source lines.
-_PREEXPANSION_DEF_RE = re.compile(r"\\def\\([A-Za-z]+)\{")
+# Structural shorthand macros (\bal ... \eal): one-line \def's read from the
+# PRE-EXPANSION MACROS section of the configured .sty (the single source of
+# truth, shared with pdflatex) and expanded textually before the pylatexenc
+# walk — pylatexenc parses surface syntax without expanding macros, so
+# anything that changes document structure (like opening display math) must
+# be substituted first. Bodies are required to be single-line so node
+# positions keep mapping to source lines. Two forms:
+#   \def\name{body}            every \name becomes body
+#   \def\name#1\delim{body}    TeX's delimited parameter: \name takes the text
+#                              up to the next \delim as #1. The idiom for
+#                              wrapping an environment that scans its own body
+#                              for a literal \end (amsmath's align*), which a
+#                              plain \def\eal{\end{align*}} would hide.
+_PREEXPANSION_DEF_RE = re.compile(r"\\def\\([A-Za-z]+)(?:#1\\([A-Za-z]+))?\{")
 
 
-def _parse_preexpansion_macros(sty: str, sty_name: str = "the .sty file") -> Dict[str, str]:
+class DelimitedMacro(NamedTuple):
+    """\\def\\name#1\\delimiter{body}: body with #1 = the text up to \\delimiter."""
+    delimiter: str
+    body: str
+
+
+PreexpansionMacro = Union[str, DelimitedMacro]
+
+
+class PreexpansionError(ValueError):
+    """A pre-expansion macro use that cannot be expanded; `line` is 1-based."""
+    def __init__(self, line: int, message: str):
+        super().__init__(message)
+        self.line = line
+
+
+def _parse_preexpansion_macros(sty: str, sty_name: str = "the .sty file") -> Dict[str, PreexpansionMacro]:
     begin = sty.find("% BEGIN PRE-EXPANSION MACROS")
     end = sty.find("% END PRE-EXPANSION MACROS")
     if begin == -1 or end == -1 or end <= begin:
         raise ValueError(f"{sty_name}: PRE-EXPANSION MACROS markers not found")
     section = sty[begin:end]
-    macros: Dict[str, str] = {}
+    macros: Dict[str, PreexpansionMacro] = {}
     for m in _PREEXPANSION_DEF_RE.finditer(section):
         depth, i = 1, m.end()
         while i < len(section) and depth > 0:
@@ -92,20 +114,26 @@ def _parse_preexpansion_macros(sty: str, sty_name: str = "the .sty file") -> Dic
                 f"{sty_name}: \\def\\{m.group(1)} body spans multiple lines; "
                 f"pre-expansion bodies must be single-line to preserve "
                 f"source-line mapping")
-        macros[m.group(1)] = body
+        if m.group(2):
+            if re.search(r"#(?!1)", body):
+                raise ValueError(f"{sty_name}: \\def\\{m.group(1)}: only #1 is supported "
+                                 f"in a delimited pre-expansion body")
+            macros[m.group(1)] = DelimitedMacro(m.group(2), body)
+        else:
+            macros[m.group(1)] = body
     if not macros:
         raise ValueError(f"{sty_name}: no macros in PRE-EXPANSION MACROS section")
     return macros
 
 
-def _load_preexpansion_macros() -> Dict[str, str]:
+def _load_preexpansion_macros() -> Dict[str, PreexpansionMacro]:
     from .config import sty_path
     path = sty_path()
     with open(path, "r", encoding="utf-8") as f:
         return _parse_preexpansion_macros(f.read(), path)
 
 
-_preexpansion_macros: Optional[Dict[str, str]] = None
+_preexpansion_macros: Optional[Dict[str, PreexpansionMacro]] = None
 
 
 def clear_preexpansion_cache() -> None:
@@ -115,15 +143,67 @@ def clear_preexpansion_cache() -> None:
     _preexpansion_macros = None
 
 
-def _expand_preexpansion(source: str, macros: Optional[Dict[str, str]] = None) -> str:
+def _expand_preexpansion(source: str,
+                         macros: Optional[Dict[str, PreexpansionMacro]] = None) -> str:
+    """Expand the PRE-EXPANSION macros textually. Delimited macros first (their
+    argument may contain plain ones), then plain ones. Raises
+    PreexpansionError for a delimited macro without its delimiter, a stray
+    delimiter, or a nested use (TeX would pair them differently)."""
     if macros is None:
         global _preexpansion_macros
         if _preexpansion_macros is None:
             _preexpansion_macros = _load_preexpansion_macros()
         macros = _preexpansion_macros
-    names = "|".join(sorted(macros, key=len, reverse=True))
+    for name, macro in macros.items():
+        if isinstance(macro, DelimitedMacro):
+            source = _expand_delimited(source, name, macro)
+    plain = {k: v for k, v in macros.items() if isinstance(v, str)}
+    if not plain:
+        return source
+    names = "|".join(sorted(plain, key=len, reverse=True))
     pattern = re.compile(r"\\(" + names + r")(?![A-Za-z])")
-    return pattern.sub(lambda m: macros[m.group(1)], source)
+    return pattern.sub(lambda m: plain[m.group(1)], source)
+
+
+def _in_comment(source: str, pos: int) -> bool:
+    """True if pos sits after an unescaped % on its line (TeX ignores it)."""
+    line_start = source.rfind("\n", 0, pos) + 1
+    return re.search(r"(?<!\\)%", source[line_start:pos]) is not None
+
+
+def _expand_delimited(source: str, name: str, macro: DelimitedMacro) -> str:
+    opener = re.compile(r"\\%s(?![A-Za-z])" % re.escape(name))
+    closer = re.compile(r"\\%s(?![A-Za-z])" % re.escape(macro.delimiter))
+
+    def uses(rx):
+        return [m for m in rx.finditer(source) if not _in_comment(source, m.start())]
+
+    def line(pos):
+        return source.count("\n", 0, pos) + 1
+
+    events = sorted([(m.start(), "open", m) for m in uses(opener)]
+                    + [(m.start(), "close", m) for m in uses(closer)],
+                    key=lambda e: e[0])
+    out, pos, open_m = [], 0, None
+    for at, kind, m in events:
+        if kind == "open":
+            if open_m is not None:
+                raise PreexpansionError(
+                    line(at), f"\\{name} inside an unfinished \\{name} ... \\{macro.delimiter} "
+                              f"(opened on line {line(open_m.start())})")
+            open_m = m
+        else:
+            if open_m is None:
+                raise PreexpansionError(
+                    line(at), f"\\{macro.delimiter} without a matching \\{name}")
+            out.append(source[pos:open_m.start()])
+            out.append(macro.body.replace("#1", source[open_m.end():m.start()]))
+            pos, open_m = m.end(), None
+    if open_m is not None:
+        raise PreexpansionError(
+            line(open_m.start()), f"\\{name} without a matching \\{macro.delimiter}")
+    out.append(source[pos:])
+    return "".join(out)
 
 
 def render_math(latex: str, display: bool, alttext: Optional[str] = None) -> str:
@@ -338,7 +418,10 @@ def _list_counter(number: int, style: str) -> str:
 
 class _Parser:
     def __init__(self, source: str, filepath: str):
-        self.source = _expand_preexpansion(source)
+        try:
+            self.source = _expand_preexpansion(source)
+        except PreexpansionError as e:
+            raise LatexDialectError(f"{filepath}:{e.line}: {e}") from e
         self.filepath = filepath
         self._demo_counter = 0
         self._in_llm = False

@@ -899,3 +899,55 @@ def test_nbsp_at_run_boundaries():
     assert f("x</math> <a>y</a>") == "x</math>\u00a0<a>y</a>"
     assert f(" lead and trail ") == " lead and trail "  # only next to a tag
     assert f('<math alttext="a b"><mi>x</mi></math>') == '<math alttext="a b"><mi>x</mi></math>'
+
+
+def test_preexpansion_delimited_macro_parsing():
+    from latexblocks.latex_processor import _parse_preexpansion_macros, DelimitedMacro
+    m = _parse_preexpansion_macros("% BEGIN PRE-EXPANSION MACROS\n"
+                                   "\\def\\bal#1\\eal{\\begin{align*}#1\\end{align*}}\n"
+                                   "\\def\\zz{Z}\n"
+                                   "% END PRE-EXPANSION MACROS\n")
+    assert m == {"bal": DelimitedMacro("eal", "\\begin{align*}#1\\end{align*}"), "zz": "Z"}, m
+    try:
+        _parse_preexpansion_macros("% BEGIN PRE-EXPANSION MACROS\n\\def\\x#1\\y{#2}\n"
+                                   "% END PRE-EXPANSION MACROS\n")
+        assert False, "expected ValueError for #2"
+    except ValueError as e:
+        assert "only #1" in str(e)
+
+
+def test_preexpansion_delimited_expansion():
+    from latexblocks.latex_processor import _expand_preexpansion, DelimitedMacro, PreexpansionError
+    macros = {"bal": DelimitedMacro("eal", "\\begin{align*}#1\\end{align*}"), "zz": "Z"}
+    src = "a\n\\bal\nx &= \\zz \\\\\ny\n\\eal.\n\\balance \\bal q\\eal"
+    out = _expand_preexpansion(src, macros)
+    assert out == ("a\n\\begin{align*}\nx &= Z \\\\\ny\n\\end{align*}.\n"
+                   "\\balance \\begin{align*} q\\end{align*}"), out
+    assert out.count("\n") == src.count("\n")  # line mapping preserved
+    # TeX ignores comments, so does the expander
+    assert (_expand_preexpansion("% see \\bal\n\\bal x\\eal % and \\eal", macros)
+            == "% see \\bal\n\\begin{align*} x\\end{align*} % and \\eal")
+    for bad, fragment, line in [
+            ("a\n\\bal x", "\\bal without a matching \\eal", 2),
+            ("x\\eal", "\\eal without a matching \\bal", 1),
+            ("\\bal a\n\\bal b \\eal", "\\bal inside an unfinished", 2)]:
+        try:
+            _expand_preexpansion(bad, macros)
+            assert False, bad
+        except PreexpansionError as e:
+            assert fragment in str(e) and e.line == line, (bad, str(e), e.line)
+
+
+def test_bal_as_align_star_via_delimited_macro():
+    import latexblocks.latex_processor as lp
+    saved = lp._preexpansion_macros
+    lp._preexpansion_macros = {"bal": lp.DelimitedMacro("eal", "\\begin{align*}#1\\end{align*}")}
+    try:
+        h = prose("Before\n\\bal\na &= b \\\\\n\\intertext{so $x$}\nc &= d\n\\eal\nafter.")
+        ref = prose("Before\n\\begin{align*}\na &= b \\\\\n\\intertext{so $x$}\nc &= d\n"
+                    "\\end{align*}\nafter.")
+        assert h == ref, (h, ref)
+        assert 'class="intertext-text"' in h
+        expect_error("text\n\n\\bal a &= b", "page.tex:5: \\bal without a matching \\eal")
+    finally:
+        lp._preexpansion_macros = saved

@@ -1155,14 +1155,18 @@ mtd.math-tag {
 /* Column alignment: MathML Core dropped mtable's columnalign, so Chromium
    and WebKit center every cell and the relation signs of an aligned display
    drift apart when its rows differ in width. The build worker stamps each
-   cell with its column's alignment; text-align on a cell is honored by
-   every engine (Firefox agrees with its native columnalign handling). */
+   cell with its column's alignment. Firefox and WebKit honor text-align on
+   the cell; Chromium lays a cell's math out as one block-level box, which
+   text-align does not move, so it needs justify-items (measured: right
+   columns stayed left-aligned in Chromium with text-align alone). */
 mtd[columnalign="left"] {
   text-align: left;
+  justify-items: start;
 }
 
 mtd[columnalign="right"] {
   text-align: right;
+  justify-items: end;
 }
 
 /* \cancel{...}: the build worker rewrites menclose (absent from MathML

@@ -386,10 +386,15 @@ The packaged `assets/default.sty` (or your own `sty_path`) is the single
 source of truth shared between pdflatex and the Python/Node pipeline, via
 two marker-delimited sections:
 
-- `% BEGIN PRE-EXPANSION MACROS` / `% END PRE-EXPANSION MACROS`: simple
-  parameterless `\def\name{expansion}` one-liners. `latex_processor.py`
-  textually expands every use before parsing, so this is the single source
-  of truth for those shorthands (e.g. `\bal`/`\eal`).
+- `% BEGIN PRE-EXPANSION MACROS` / `% END PRE-EXPANSION MACROS`: one-line
+  `\def`s that `latex_processor.py` textually expands before parsing, so this
+  is the single source of truth for those shorthands. Either parameterless,
+  `\def\name{expansion}`, or TeX's delimited form `\def\name#1\delim{...#1...}`,
+  where `\name` takes everything up to the next `\delim` as `#1` (comments
+  skipped; an unmatched or nested pair is a `file:line` error). The delimited
+  form is how to wrap an environment that scans its own body for a literal
+  `\end`, which a plain `\def\eal{\end{align*}}` would hide from pdflatex:
+  `\def\bal#1\eal{\begin{align*}#1\end{align*}}`.
 - `% BEGIN MATH MACROS` / `% END MATH MACROS`: simple one-line
   `\newcommand`/`\renewcommand{\name}[n]{expansion}` definitions. The names
   feed the notation-collision check (a `\notation` declaration can't reuse
